@@ -3,11 +3,13 @@
   "description": "Native PDO-powered MySQL 8.4 connection and query helpers.",
   "type": "library",
   "license": "MIT",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
   "require": {
     "php": "^8.4",
     "ext-pdo_mysql": "*",
-    "monkeyscloud/monkeyslegion-core": "^1.0",
-    "monkeyscloud/monkeyslegion-di":   "^1.0"
+    "monkeyscloud/monkeyslegion-core": "^1.0@dev",
+    "monkeyscloud/monkeyslegion-di": "dev-main"
   },
   "autoload": {
     "psr-4": {
