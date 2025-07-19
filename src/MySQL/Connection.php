@@ -21,9 +21,7 @@ final class Connection
     public function __construct(array $config)
     {
         $c   = $config['connections']['mysql'];
-        print_r($c);
         $dsn = $c['dsn'];
-
         try {
             // First attempt: as-configured (e.g. "db" inside Docker)
             $this->pdo = new PDO(
