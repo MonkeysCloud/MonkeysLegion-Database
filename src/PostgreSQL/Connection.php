@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace MonkeysLegion\Database\MySQL;
+namespace MonkeysLegion\Database\PostgreSQL;
 
 use MonkeysLegion\Database\Connection\AbstractConnection;
-use MonkeysLegion\Database\DSN\MySQLDsnBuilder;
+use MonkeysLegion\Database\DSN\PostgreSQLDsnBuilder;
 use MonkeysLegion\Database\Support\ConnectionHelper;
 use MonkeysLegion\Database\Types\DatabaseType;
 
@@ -17,12 +17,11 @@ final class Connection extends AbstractConnection
             return;
         }
 
-        if (!isset($this->config['connections'][DatabaseType::MYSQL->value])) {
-            throw new \InvalidArgumentException('MySQL connection configuration not found.');
+        if (!isset($this->config['connections'][DatabaseType::POSTGRESQL->value])) {
+            throw new \InvalidArgumentException('PostgreSQL connection configuration not found.');
         }
 
-        // Attempt to connect to the database
-        $c = $this->config['connections'][DatabaseType::MYSQL->value];
+        $c = $this->config['connections'][DatabaseType::POSTGRESQL->value];
 
         // Use provided DSN or build one from components
         $dsn = $c['dsn'] ?? $this->buildDsn($c);
@@ -35,8 +34,9 @@ final class Connection extends AbstractConnection
             $c['options'] ?? []
         );
 
-        // Enforce strict SQL and modern defaults
-        $this->pdo->exec("SET NAMES utf8mb4, sql_mode='STRICT_TRANS_TABLES'");
+        // Set default encoding and timezone
+        $this->pdo->exec("SET NAMES 'UTF8'");
+        $this->pdo->exec("SET timezone = 'UTC'");
     }
 
     /**
@@ -44,15 +44,15 @@ final class Connection extends AbstractConnection
      *     host?: string,
      *     port?: int,
      *     database?: string,
-     *     charset?: string,
-     *     unix_socket?: string
+     *     sslmode?: string,
+     *     options?: array<int, mixed>
      * } $config
      *
      * @return string
      */
     private function buildDsn(array $config): string
     {
-        $builder = MySQLDsnBuilder::create();
+        $builder = PostgreSQLDsnBuilder::create();
 
         if (isset($config['host'])) {
             $builder->host($config['host']);
@@ -66,12 +66,12 @@ final class Connection extends AbstractConnection
             $builder->database($config['database']);
         }
 
-        if (isset($config['charset'])) {
-            $builder->charset($config['charset']);
+        if (isset($config['sslmode'])) {
+            $builder->sslMode($config['sslmode']);
         }
 
-        if (isset($config['unix_socket'])) {
-            $builder->unixSocket($config['unix_socket']);
+        if (isset($config['options'])) {
+            $builder->options(implode(' ', $config['options']));
         }
 
         return $builder->build();

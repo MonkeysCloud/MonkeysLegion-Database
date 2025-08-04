@@ -20,5 +20,18 @@
     "branch-alias": {
       "dev-main": "1.0.x-dev"
     }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^12.3",
+    "phpstan/phpstan": "^2.1"
+  },
+  "scripts": {
+    "test": "phpunit",
+    "test-coverage": "phpunit --coverage-html coverage",
+    "phpstan": "phpstan analyse src",
+    "quality": [
+      "@phpstan",
+      "@test"
+    ]
   }
 }
