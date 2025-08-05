@@ -4,62 +4,76 @@ declare(strict_types=1);
 
 namespace MonkeysLegion\Database\MySQL;
 
-use PDO;
-use PDOException;
+use MonkeysLegion\Database\Connection\AbstractConnection;
+use MonkeysLegion\Database\DSN\MySQLDsnBuilder;
+use MonkeysLegion\Database\Support\ConnectionHelper;
+use MonkeysLegion\Database\Types\DatabaseType;
 
-final class Connection
+final class Connection extends AbstractConnection
 {
-    /**
-     * @var PDO
-     */
-    private PDO $pdo;
-
-    /**
-     * @param array $config
-     * @throws PDOException
-     */
-    public function __construct(array $config)
+    public function connect(): void
     {
-        $c   = $config['connections']['mysql'];
-        $dsn = $c['dsn'];
-        try {
-            // First attempt: as-configured (e.g. "db" inside Docker)
-            $this->pdo = new PDO(
-                $dsn,
-                $c['username'],
-                $c['password'],
-                $c['options']
-            );
-        } catch (PDOException $e) {
-            // If the host isn’t resolvable (e.g. running CLI on host), fall back to 127.0.0.1
-            if (str_contains($e->getMessage(), 'getaddrinfo')) {
-                $dsn = preg_replace(
-                    '/host=[^;]+/',
-                    'host=localhost',
-                    $dsn
-                );
-
-                $this->pdo = new PDO(
-                    $dsn,
-                    $c['username'],
-                    $c['password'],
-                    $c['options']
-                );
-            } else {
-                // propagate other connection errors
-                throw $e;
-            }
+        if ($this->pdo) {
+            return;
         }
+
+        if (!isset($this->config['connections'][DatabaseType::MYSQL->value])) {
+            throw new \InvalidArgumentException('MySQL connection configuration not found.');
+        }
+
+        // Attempt to connect to the database
+        $c = $this->config['connections'][DatabaseType::MYSQL->value];
+
+        // Use provided DSN or build one from components
+        $dsn = $c['dsn'] ?? $this->buildDsn($c);
+
+        // Use helper for connection with host fallback
+        $this->pdo = ConnectionHelper::createWithHostFallback(
+            $dsn,
+            $c['username'] ?? '',
+            $c['password'] ?? '',
+            $c['options'] ?? []
+        );
 
         // Enforce strict SQL and modern defaults
         $this->pdo->exec("SET NAMES utf8mb4, sql_mode='STRICT_TRANS_TABLES'");
     }
 
     /**
-     * @return PDO
+     * @param array{
+     *     host?: string,
+     *     port?: int,
+     *     database?: string,
+     *     charset?: string,
+     *     unix_socket?: string
+     * } $config
+     *
+     * @return string
      */
-    public function pdo(): PDO
+    private function buildDsn(array $config): string
     {
-        return $this->pdo;
+        $builder = MySQLDsnBuilder::create();
+
+        if (isset($config['host'])) {
+            $builder->host($config['host']);
+        }
+
+        if (isset($config['port'])) {
+            $builder->port($config['port']);
+        }
+
+        if (isset($config['database'])) {
+            $builder->database($config['database']);
+        }
+
+        if (isset($config['charset'])) {
+            $builder->charset($config['charset']);
+        }
+
+        if (isset($config['unix_socket'])) {
+            $builder->unixSocket($config['unix_socket']);
+        }
+
+        return $builder->build();
     }
 }
