@@ -65,7 +65,7 @@ abstract class AbstractConnection implements ConnectionInterface
 
     /**
      * Check if the connection is alive and responsive.
-     * 
+     *
      * @return bool
      */
     public function isAlive(): bool

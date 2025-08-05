@@ -46,9 +46,18 @@ class SQLiteDsnBuilder extends AbstractDsnBuilder
         return static::create()->file($path);
     }
 
+    /**
+     * Create a DSN for a temporary SQLite database file.
+     * The file will be created in the system's temporary directory.
+     * @return static
+     * @throws \RuntimeException if the temporary file cannot be created
+     */
     public static function temporary(): static
     {
         $tempFile = tempnam(sys_get_temp_dir(), 'sqlite_');
+        if ($tempFile === false) {
+            throw new \RuntimeException('Failed to create a temporary SQLite file.');
+        }
         return static::create()->file($tempFile);
     }
 }

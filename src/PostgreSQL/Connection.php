@@ -71,7 +71,20 @@ final class Connection extends AbstractConnection
         }
 
         if (isset($config['options'])) {
-            $builder->options(implode(' ', $config['options']));
+            $options = [];
+            // Check if associative array (key-value pairs)
+            $isAssoc = array_keys($config['options']) !== range(0, count($config['options']) - 1);
+            if ($isAssoc) {
+                foreach ($config['options'] as $key => $value) {
+                    $options[] = '-c ' . $key . '=' . $value;
+                }
+            } else {
+                // Assume each element is a valid option fragment
+                foreach ($config['options'] as $opt) {
+                    $options[] = (string)$opt;
+                }
+            }
+            $builder->options(implode(' ', $options));
         }
 
         return $builder->build();

@@ -10,84 +10,97 @@ use MonkeysLegion\Database\Types\DatabaseType;
 final class ConnectionFactory
 {
     /**
+     * Create a connection using the "default" connection type from the config.
+     *
      * @param array{
-     *   connections?: array<string, array{
-     *     dsn?: string,
-     *     file?: string,
-     *     memory?: bool,
-     *     username?: string,
-     *     password?: string,
-     *     options?: array<int, mixed>
-     *   }>
+     *     default?: string,
+     *     connections: array<string, array{
+     *         dsn?: string,
+     *         file?: string,
+     *         memory?: bool,
+     *         username?: string,
+     *         password?: string,
+     *         options?: array<int, mixed>
+     *     }>
      * } $config
      *
-     * @return \MonkeysLegion\Database\Contracts\ConnectionInterface
+     * @return ConnectionInterface
      */
     public static function create(array $config): ConnectionInterface
     {
-        $connections = $config['connections'] ?? [];
-
-        foreach (DatabaseType::cases() as $type) {
-            if (isset($connections[$type->value])) {
-                $connectionClass = $type->getConnectionClass();
-                $instance = new $connectionClass($config);
-
-                assert($instance instanceof ConnectionInterface);
-                return $instance;
-            }
+        if (!isset($config['default'])) {
+            throw new \InvalidArgumentException('No default connection configuration found.');
         }
 
-        throw new \InvalidArgumentException('No valid database connection configuration found.');
+        return self::createByType($config['default'], $config);
     }
 
     /**
-     * Create a connection instance by type string.
+     * Create a connection instance by connection type string.
+     *
      * @param string $type
      * @param array{
-     *     connections: array{
-     *         mysql: array{
-     *             dsn: string,
-     *             username: string,
-     *             password: string,
-     *             options?: array<int, mixed>
-     *         }
-     *     }
+     *     default: string,
+     *     connections: array<string, array{
+     *         dsn?: string,
+     *         file?: string,
+     *         memory?: bool,
+     *         username?: string,
+     *         password?: string,
+     *         options?: array<int, mixed>
+     *     }>
      * } $config
      *
-     * @return \MonkeysLegion\Database\Contracts\ConnectionInterface
+     * @return ConnectionInterface
      */
     public static function createByType(string $type, array $config): ConnectionInterface
     {
         $databaseType = DatabaseType::fromString($type);
         $connectionClass = $databaseType->getConnectionClass();
 
-        $instance = new $connectionClass($config);
-        assert($instance instanceof ConnectionInterface);
+        $connectionConfig = $config['connections'][$type]
+            ?? throw new \InvalidArgumentException("Missing config for connection type '{$type}'");
+
+        $instance = new $connectionClass($connectionConfig);
+
+        if (!$instance instanceof ConnectionInterface) {
+            throw new \RuntimeException("Class {$connectionClass} must implement ConnectionInterface.");
+        }
 
         return $instance;
     }
 
     /**
-     * Create a connection instance by type string.
+     * Create a connection instance by `DatabaseType` enum.
+     *
      * @param DatabaseType $type
      * @param array{
-     *     connections: array{
-     *         mysql: array{
-     *             dsn: string,
-     *             username: string,
-     *             password: string,
-     *             options?: array<int, mixed>
-     *         }
-     *     }
+     *     default: string,
+     *     connections: array<string, array{
+     *         dsn?: string,
+     *         file?: string,
+     *         memory?: bool,
+     *         username?: string,
+     *         password?: string,
+     *         options?: array<int, mixed>
+     *     }>
      * } $config
      *
-     * @return \MonkeysLegion\Database\Contracts\ConnectionInterface
+     * @return ConnectionInterface
      */
     public static function createByEnum(DatabaseType $type, array $config): ConnectionInterface
     {
         $connectionClass = $type->getConnectionClass();
-        $instance = new $connectionClass($config);
-        assert($instance instanceof ConnectionInterface);
+
+        $connectionConfig = $config['connections'][$type->value]
+            ?? throw new \InvalidArgumentException("Missing config for connection type '{$type->value}'");
+
+        $instance = new $connectionClass($connectionConfig);
+
+        if (!$instance instanceof ConnectionInterface) {
+            throw new \RuntimeException("Class {$connectionClass} must implement ConnectionInterface.");
+        }
+
         return $instance;
     }
 }

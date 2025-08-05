@@ -16,6 +16,7 @@ class ConnectionHelper
      * @param string $username
      * @param string $password
      * @param array<int, mixed> $options
+     * @param array<string> $fallbackErrorPatterns
      * @return PDO
      * @throws PDOException
      */
@@ -23,14 +24,30 @@ class ConnectionHelper
         string $dsn,
         string $username = '',
         string $password = '',
-        array $options = []
+        array $options = [],
+        array $fallbackErrorPatterns = ['getaddrinfo', 'Connection refused']
     ): PDO {
         try {
             // First attempt: as-configured
             return new PDO($dsn, $username, $password, $options);
         } catch (PDOException $e) {
             // If the host isn't resolvable, fall back to localhost
-            if (str_contains($e->getMessage(), 'getaddrinfo') || str_contains($e->getMessage(), 'Connection refused')) {
+            $shouldFallback = false;
+            foreach ($fallbackErrorPatterns as $pattern) {
+                // If pattern starts and ends with '/', treat as regex
+                if (strlen($pattern) > 2 && $pattern[0] === '/' && substr($pattern, -1) === '/') {
+                    if (preg_match($pattern, $e->getMessage())) {
+                        $shouldFallback = true;
+                        break;
+                    }
+                } else {
+                    if (str_contains($e->getMessage(), $pattern)) {
+                        $shouldFallback = true;
+                        break;
+                    }
+                }
+            }
+            if ($shouldFallback) {
                 $fallbackDsn = preg_replace(
                     '/host=[^;]+/',
                     'host=localhost',

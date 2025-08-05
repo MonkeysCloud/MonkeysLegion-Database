@@ -16,6 +16,7 @@ class ConnectionFactoryTest extends TestCase
     public function testCreateWithMySQLConfig(): void
     {
         $config = [
+            'default' => 'mysql',
             'connections' => [
                 'mysql' => [
                     'dsn' => 'mysql:host=localhost;dbname=test',
@@ -33,6 +34,7 @@ class ConnectionFactoryTest extends TestCase
     public function testCreateWithPostgreSQLConfig(): void
     {
         $config = [
+            'default' => 'postgresql',
             'connections' => [
                 'postgresql' => [
                     'dsn' => 'pgsql:host=localhost;dbname=test',
@@ -50,6 +52,7 @@ class ConnectionFactoryTest extends TestCase
     public function testCreateWithSQLiteConfig(): void
     {
         $config = [
+            'default' => 'sqlite',
             'connections' => [
                 'sqlite' => [
                     'dsn' => 'sqlite::memory:',
@@ -65,6 +68,7 @@ class ConnectionFactoryTest extends TestCase
     public function testCreatePrioritizesMySQLWhenMultipleConfigsExist(): void
     {
         $config = [
+            'default' => 'mysql',
             'connections' => [
                 'mysql' => [
                     'dsn' => 'mysql:host=localhost;dbname=test',
@@ -85,17 +89,23 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateThrowsExceptionWithNoValidConfig(): void
     {
-        $config = ['connections' => []];
+        $config = [
+            'default' => 'mysql',
+            'connections' => []
+        ];
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('No valid database connection configuration found.');
+        $this->expectExceptionMessage("Missing config for connection type 'mysql'");
 
         ConnectionFactory::create($config);
     }
 
     public function testCreateByTypeWithMySQL(): void
     {
-        $config = ['connections' => ['mysql' => []]];
+        $config = [
+            'default' => 'mysql',
+            'connections' => ['mysql' => []]
+        ];
 
         $connection = ConnectionFactory::createByType('mysql', $config);
         $this->assertInstanceOf(MySQLConnection::class, $connection);
@@ -103,7 +113,10 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByTypeWithPostgreSQL(): void
     {
-        $config = ['connections' => ['postgresql' => []]];
+        $config = [
+            'default' => 'postgresql',
+            'connections' => ['postgresql' => []]
+        ];
 
         $connection = ConnectionFactory::createByType('postgresql', $config);
         $this->assertInstanceOf(PostgreSQLConnection::class, $connection);
@@ -111,7 +124,14 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByTypeWithPostgreSQLAliases(): void
     {
-        $config = ['connections' => ['postgresql' => []]];
+        $config = [
+            'default' => 'postgresql',
+            'connections' => [
+                'postgresql' => [],
+                'postgres' => [],
+                'pgsql' => []
+            ]
+        ];
 
         $connection1 = ConnectionFactory::createByType('postgres', $config);
         $connection2 = ConnectionFactory::createByType('pgsql', $config);
@@ -122,7 +142,10 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByTypeWithSQLite(): void
     {
-        $config = ['connections' => ['sqlite' => []]];
+        $config = [
+            'default' => 'sqlite',
+            'connections' => ['sqlite' => []]
+        ];
 
         $connection = ConnectionFactory::createByType('sqlite', $config);
         $this->assertInstanceOf(SQLiteConnection::class, $connection);
@@ -130,7 +153,10 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByTypeThrowsExceptionForUnsupportedType(): void
     {
-        $config = [];
+        $config = [
+            'default' => 'oracle',
+            'connections' => []
+        ];
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unsupported database type: oracle');
@@ -140,7 +166,10 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByEnum(): void
     {
-        $config = ['connections' => ['mysql' => []]];
+        $config = [
+            'default' => 'mysql',
+            'connections' => ['mysql' => []]
+        ];
 
         $connection = ConnectionFactory::createByEnum(DatabaseType::MYSQL, $config);
         $this->assertInstanceOf(MySQLConnection::class, $connection);
@@ -148,7 +177,14 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateByEnumWithAllTypes(): void
     {
-        $config = ['connections' => []];
+        $config = [
+            'default' => 'mysql',
+            'connections' => [
+                'mysql' => [],
+                'postgresql' => [],
+                'sqlite' => []
+            ]
+        ];
 
         $mysqlConnection = ConnectionFactory::createByEnum(DatabaseType::MYSQL, $config);
         $postgresConnection = ConnectionFactory::createByEnum(DatabaseType::POSTGRESQL, $config);

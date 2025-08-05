@@ -30,9 +30,9 @@ class MySQLDsnBuilderTest extends TestCase
 
     public function testDockerShortcut(): void
     {
-        $dsn = MySQLDsnBuilder::docker('test_db', 'mysql_container')->build();
+        $dsn = MySQLDsnBuilder::docker('test_db', 'db')->build();
 
-        $this->assertEquals('mysql:host=mysql_container;port=3306;dbname=test_db;charset=utf8mb4', $dsn);
+        $this->assertEquals('mysql:host=db;port=3306;dbname=test_db;charset=utf8mb4', $dsn);
     }
 
     public function testUnixSocket(): void
