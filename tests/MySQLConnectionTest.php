@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 
 class MySQLConnectionTest extends TestCase
 {
+    /** @var array<string, mixed> */
     private array $config;
 
     protected function setUp(): void

@@ -15,16 +15,7 @@ abstract class AbstractConnection implements ConnectionInterface
     protected ?PDO $pdo = null;
 
     /**
-     * @param array{
-     *     connections: array<string, array{
-     *         dsn?: string,
-     *         file?: string,
-     *         memory?: bool,
-     *         username?: string,
-     *         password?: string,
-     *         options?: array<int, mixed>
-     *     }>
-     * } $config
+     * @param array<string, mixed> $config
      */
     public function __construct(protected array $config) {}
 

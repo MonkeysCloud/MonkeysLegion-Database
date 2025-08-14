@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 class SQLiteConnectionTest extends TestCase
 {
+    /** @var array<string, mixed> */
     private array $config;
     private string $tempDbFile;
 
@@ -85,13 +86,17 @@ class SQLiteConnectionTest extends TestCase
 
         // Test foreign keys are enabled
         $stmt = $pdo->query("PRAGMA foreign_keys");
-        $result = $stmt->fetch();
-        $this->assertEquals('1', $result['foreign_keys']);
+        if ($stmt) {
+            $result = $stmt->fetch();
+            $this->assertEquals('1', $result['foreign_keys']);
+        }
 
         // Test journal mode is WAL
         $stmt = $pdo->query("PRAGMA journal_mode");
-        $result = $stmt->fetch();
-        $this->assertEquals('wal', strtolower($result['journal_mode']));
+        if ($stmt) {
+            $result = $stmt->fetch();
+            $this->assertEquals('wal', strtolower($result['journal_mode']));
+        }
     }
 
     public function testPdoThrowsExceptionWhenNotConnected(): void
