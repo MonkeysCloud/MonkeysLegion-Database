@@ -9,7 +9,8 @@
     "php": "^8.4",
     "ext-pdo_mysql": "*",
     "monkeyscloud/monkeyslegion-core": "^1.0",
-    "monkeyscloud/monkeyslegion-di": "^1.0"
+    "monkeyscloud/monkeyslegion-di": "^1.0",
+    "psr/cache": "^3.0"
   },
   "autoload": {
     "psr-4": {
@@ -20,5 +21,18 @@
     "branch-alias": {
       "dev-main": "1.0.x-dev"
     }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^12.3",
+    "phpstan/phpstan": "^2.1"
+  },
+  "scripts": {
+    "test": "phpunit",
+    "test-coverage": "phpunit --coverage-html coverage",
+    "phpstan": "phpstan analyse src",
+    "quality": [
+      "@phpstan",
+      "@test"
+    ]
   }
 }
