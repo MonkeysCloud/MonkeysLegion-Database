@@ -6,7 +6,6 @@ namespace MonkeysLegion\Database\SQLite;
 
 use MonkeysLegion\Database\Connection\AbstractConnection;
 use MonkeysLegion\Database\DSN\SQLiteDsnBuilder;
-use MonkeysLegion\Database\Types\DatabaseType;
 use PDO;
 
 final class Connection extends AbstractConnection
@@ -17,11 +16,7 @@ final class Connection extends AbstractConnection
             return;
         }
 
-        if (!isset($this->config['connections'][DatabaseType::SQLITE->value])) {
-            throw new \InvalidArgumentException('SQLite connection configuration not found.');
-        }
-
-        $c = $this->config['connections'][DatabaseType::SQLITE->value];
+        $c = $this->config;
 
         // Use provided DSN or build one from components
         $dsn = $c['dsn'] ?? $this->buildDsn($c);

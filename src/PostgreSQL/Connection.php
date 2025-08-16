@@ -7,7 +7,6 @@ namespace MonkeysLegion\Database\PostgreSQL;
 use MonkeysLegion\Database\Connection\AbstractConnection;
 use MonkeysLegion\Database\DSN\PostgreSQLDsnBuilder;
 use MonkeysLegion\Database\Support\ConnectionHelper;
-use MonkeysLegion\Database\Types\DatabaseType;
 
 final class Connection extends AbstractConnection
 {
@@ -17,11 +16,7 @@ final class Connection extends AbstractConnection
             return;
         }
 
-        if (!isset($this->config['connections'][DatabaseType::POSTGRESQL->value])) {
-            throw new \InvalidArgumentException('PostgreSQL connection configuration not found.');
-        }
-
-        $c = $this->config['connections'][DatabaseType::POSTGRESQL->value];
+        $c = $this->config;
 
         // Use provided DSN or build one from components
         $dsn = $c['dsn'] ?? $this->buildDsn($c);

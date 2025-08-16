@@ -7,7 +7,6 @@ namespace MonkeysLegion\Database\MySQL;
 use MonkeysLegion\Database\Connection\AbstractConnection;
 use MonkeysLegion\Database\DSN\MySQLDsnBuilder;
 use MonkeysLegion\Database\Support\ConnectionHelper;
-use MonkeysLegion\Database\Types\DatabaseType;
 
 final class Connection extends AbstractConnection
 {
@@ -17,12 +16,7 @@ final class Connection extends AbstractConnection
             return;
         }
 
-        if (!isset($this->config['connections'][DatabaseType::MYSQL->value])) {
-            throw new \InvalidArgumentException('MySQL connection configuration not found.');
-        }
-
-        // Attempt to connect to the database
-        $c = $this->config['connections'][DatabaseType::MYSQL->value];
+        $c = $this->config;
 
         // Use provided DSN or build one from components
         $dsn = $c['dsn'] ?? $this->buildDsn($c);
@@ -37,6 +31,7 @@ final class Connection extends AbstractConnection
 
         // Enforce strict SQL and modern defaults
         $this->pdo->exec("SET NAMES utf8mb4, sql_mode='STRICT_TRANS_TABLES'");
+        error_log('MySQL connection established successfully.');
     }
 
     /**
