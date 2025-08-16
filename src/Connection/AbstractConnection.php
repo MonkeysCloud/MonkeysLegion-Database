@@ -38,7 +38,7 @@ abstract class AbstractConnection implements ConnectionInterface
     public function pdo(): PDO
     {
         if (!$this->pdo) {
-            throw new \RuntimeException("Not connected to the database.");
+            $this->connect();
         }
 
         return $this->pdo;
