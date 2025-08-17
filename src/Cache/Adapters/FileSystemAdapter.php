@@ -38,7 +38,7 @@ class FileSystemAdapter implements CacheItemPoolInterface
 
     public function __construct(?string $directory = null)
     {
-        $this->directory = $directory . '/var/cache' ?? sys_get_temp_dir() . '/cache';
+        $this->directory = $directory ? $directory . '/var/cache' : sys_get_temp_dir() . '/cache';
 
         if (!is_dir($this->directory) && !@mkdir($this->directory, 0755, true)) {
             throw new CacheException("Cannot create cache directory: {$this->directory}");

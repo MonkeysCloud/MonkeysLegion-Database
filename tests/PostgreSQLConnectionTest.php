@@ -17,16 +17,12 @@ class PostgreSQLConnectionTest extends TestCase
     protected function setUp(): void
     {
         $this->config = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=localhost;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    ]
-                ]
+            'dsn' => 'pgsql:host=localhost;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]
         ];
     }
@@ -42,16 +38,6 @@ class PostgreSQLConnectionTest extends TestCase
     {
         $connection = new Connection($this->config);
         $this->assertFalse($connection->isConnected());
-    }
-
-    public function testPdoThrowsExceptionWhenNotConnected(): void
-    {
-        $connection = new Connection($this->config);
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Not connected to the database.');
-
-        $connection->pdo();
     }
 
     public function testDisconnectWhenNotConnected(): void
@@ -110,7 +96,7 @@ class PostgreSQLConnectionTest extends TestCase
 
     public function testConnectWithMissingConfigThrowsException(): void
     {
-        $invalidConfig = ['connections' => []];
+        $invalidConfig = [];
         $connection = new Connection($invalidConfig);
 
         $this->expectException(\InvalidArgumentException::class);

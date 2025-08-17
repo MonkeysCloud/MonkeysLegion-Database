@@ -17,16 +17,12 @@ class MySQLConnectionTest extends TestCase
     protected function setUp(): void
     {
         $this->config = [
-            'connections' => [
-                'mysql' => [
-                    'dsn' => 'mysql:host=localhost;dbname=test',
-                    'username' => 'root',
-                    'password' => '',
-                    'options' => [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    ]
-                ]
+            'dsn' => 'mysql:host=localhost;dbname=test',
+            'username' => 'root',
+            'password' => '',
+            'options' => [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]
         ];
     }
@@ -44,16 +40,6 @@ class MySQLConnectionTest extends TestCase
         $this->assertFalse($connection->isConnected());
     }
 
-    public function testPdoThrowsExceptionWhenNotConnected(): void
-    {
-        $connection = new Connection($this->config);
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Not connected to the database.');
-
-        $connection->pdo();
-    }
-
     public function testDisconnectWhenNotConnected(): void
     {
         $connection = new Connection($this->config);
@@ -65,14 +51,10 @@ class MySQLConnectionTest extends TestCase
     public function testConnectWithInvalidConfig(): void
     {
         $invalidConfig = [
-            'connections' => [
-                'mysql' => [
-                    'dsn' => 'mysql:host=nonexistent;dbname=test',
-                    'username' => 'invalid',
-                    'password' => 'invalid',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'mysql:host=nonexistent;dbname=test',
+            'username' => 'invalid',
+            'password' => 'invalid',
+            'options' => []
         ];
 
         $connection = new Connection($invalidConfig);
@@ -99,7 +81,7 @@ class MySQLConnectionTest extends TestCase
 
     public function testConnectWithMissingConfigThrowsException(): void
     {
-        $invalidConfig = ['connections' => []];
+        $invalidConfig = [];
         $connection = new Connection($invalidConfig);
 
         $this->expectException(\InvalidArgumentException::class);

@@ -6,7 +6,6 @@ namespace MonkeysLegion\Database\Tests\Cache\Adapters;
 
 use MonkeysLegion\Database\Cache\Adapters\FileSystemAdapter;
 use MonkeysLegion\Database\Cache\Items\CacheItem;
-use MonkeysLegion\Database\Cache\Enum\Constants;
 use PHPUnit\Framework\TestCase;
 
 class FileSystemAdapterLockTest extends TestCase
@@ -25,7 +24,7 @@ class FileSystemAdapterLockTest extends TestCase
     {
         $this->cleanupTestCache();
         if (is_dir($this->tempDir)) {
-            rmdir($this->tempDir);
+            rrmdir($this->tempDir);
         }
     }
 

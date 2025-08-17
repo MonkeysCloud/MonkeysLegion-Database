@@ -13,7 +13,7 @@ A flexible PDO-based database abstraction layer supporting MySQL, PostgreSQL, an
 - ✅ **Factory Pattern**: Flexible connection creation
 - ✅ **Docker Ready**: Built-in support for containerized environments
 - ✅ **Zero Dependencies**: Pure PDO implementation
-- ✅ **High-Performance Caching**: Array and FileSystem cache adapters
+- ✅ **High-Performance Caching**: Array, FileSystem, and Redis cache adapters
 - ✅ **Concurrency Protection**: Lock-based stale-while-revalidate pattern
 - ✅ **Automatic Cleanup**: Intelligent cache maintenance and monitoring
 - ✅ **PSR Compatible**: Follows PSR-16 caching standards
@@ -104,7 +104,7 @@ ConnectionInterface::class => function() {
 
 ## Cache System
 
-The package includes a high-performance PSR-16 compatible cache system with two adapters:
+The package includes a high-performance PSR-16 compatible cache system with three adapters:
 
 ### Array Cache Adapter
 
@@ -297,6 +297,185 @@ $cache->configureAutoCleanup(
     probability: 10,     // More frequent cleanup (1 in 10)
     interval: 300        // Cleanup every 5 minutes
 );
+```
+
+### Redis Cache Adapter
+
+A high-performance distributed cache adapter using Redis for scalable applications:
+
+```php
+use MonkeysLegion\Database\Cache\Adapters\RedisCacheAdapter;
+use MonkeysLegion\Database\Cache\Items\CacheItem;
+
+// Method 1: Using existing Redis connection
+$redis = new \Redis();
+$redis->connect('127.0.0.1', 6379);
+$cache = new RedisCacheAdapter($redis, 'myapp:');
+
+// Method 2: Using factory method (recommended)
+$cache = new RedisCacheAdapter(
+    RedisCacheAdapter::createConnection(
+        host: 'localhost',
+        port: 6379,
+        auth: 'password',      // optional
+        database: 0           // optional
+    ),
+    'myapp:'
+);
+
+// Basic caching
+$item = new CacheItem('user_session_123');
+$item->set(['user_id' => 123, 'roles' => ['admin']]);
+$item->expiresAfter(1800); // 30 minutes
+
+$cache->save($item);
+
+// Retrieve cached data
+$cachedItem = $cache->getItem('user_session_123');
+if ($cachedItem->isHit()) {
+    $sessionData = $cachedItem->get();
+}
+```
+
+#### Advanced Redis Cache Features
+
+**1. High-Performance Batch Operations**
+
+```php
+// Efficient multi-get using Redis MGET
+$items = $cache->getItems(['user_1', 'user_2', 'user_3']);
+foreach ($items as $key => $item) {
+    if ($item->isHit()) {
+        echo "User {$key}: " . json_encode($item->get()) . "\n";
+    }
+}
+
+// Efficient multi-delete
+$cache->deleteItems(['user_1', 'user_2', 'user_3']);
+
+// Pipeline commits for better performance
+$cache->saveDeferred($item1);
+$cache->saveDeferred($item2);
+$cache->saveDeferred($item3);
+$cache->commit(); // All saved in single pipeline
+```
+
+**2. Connection Management & Health Monitoring**
+
+```php
+// Check connection health
+if ($cache->isConnected()) {
+    echo "Redis is responsive\n";
+}
+
+// Get detailed Redis statistics
+$stats = $cache->getStatistics();
+echo "Hit Ratio: {$stats['hit_ratio']}%\n";
+echo "Redis Version: " . $stats['redis_stats']['redis_version'] . "\n";
+echo "Connected Clients: " . $stats['redis_stats']['connected_clients'] . "\n";
+
+// Get connection info
+$info = $cache->getConnectionInfo();
+echo "Redis Server: {$info['redis_version']}\n";
+echo "Used Memory: {$info['used_memory_human']}\n";
+```
+
+**3. Advanced Configuration**
+
+```php
+// Production Redis setup with authentication
+$cache = new RedisCacheAdapter(
+    RedisCacheAdapter::createConnection(
+        host: 'redis.example.com',
+        port: 6379,
+        timeout: 2.0,          // 2 second timeout
+        auth: 'secure_password',
+        database: 1            // Use database 1
+    ),
+    'prod:cache:'             // Namespace for production
+);
+
+// Development setup
+$cache = new RedisCacheAdapter(
+    RedisCacheAdapter::createConnection(),
+    'dev:cache:'
+);
+```
+
+**4. Error Handling & Resilience**
+
+The Redis adapter includes comprehensive error handling:
+
+```php
+try {
+    $cache = new RedisCacheAdapter(
+        RedisCacheAdapter::createConnection('unreachable-host')
+    );
+} catch (CacheException $e) {
+    // Fallback to file cache
+    $cache = new FileSystemAdapter();
+    error_log("Redis unavailable, using file cache: " . $e->getMessage());
+}
+
+// Operations fail gracefully
+$item = $cache->getItem('some_key');
+// Always returns a CacheItem, even if Redis is down
+if ($item->isHit()) {
+    return $item->get();
+} else {
+    // Generate fresh data
+    return expensiveOperation();
+}
+```
+
+**5. Pattern-Based Operations**
+
+```php
+// Clear all user sessions
+$cache->clearByPrefix('session:user:');
+
+// Clear all cache (use with caution in production)
+$cache->clear();
+
+// Selective cleanup by pattern
+$cache->clearByPrefix('temp:');      // Clear temporary data
+$cache->clearByPrefix('api:v1:');    // Clear old API cache
+```
+
+#### Redis vs Other Adapters Comparison
+
+| Feature               | Array             | FileSystem        | Redis                                 |
+|-----------------------|-------------------|-------------------|---------------------------------------|
+| **Persistence**       | ❌ Memory only    | ✅ File-based    | ✅ In-memory + optional persistence  |
+| **Multi-process**     | ❌ Single process | ✅ Shared files  | ✅ Distributed                       |
+| **Performance**       | ⚡ Fastest        | 🔶 Medium        | ⚡ Very fast                         |
+| **Scalability**       | ❌ Limited        | 🔶 Single server | ✅ Distributed/Clustered             |
+| **Concurrency**       | ❌ No protection  | ✅ Lock-based    | ✅ Atomic operations                 |
+| **Memory Usage**      | 🔴 High           | 🟢 Low           | 🔶 Medium                            |
+| **Setup Complexity**  | 🟢 None           | 🟢 None          | 🔶 Redis server required             |
+
+#### Best Practices
+
+```php
+// Use appropriate TTL based on data type
+$userProfile = new CacheItem('user_profile_123');
+$userProfile->set($userData);
+$userProfile->expiresAfter(3600);    // 1 hour for user data
+
+$apiResponse = new CacheItem('api_weather_london');
+$apiResponse->set($weatherData);
+$apiResponse->expiresAfter(300);     // 5 minutes for weather
+
+// Use prefixes for organization
+$userCache = new RedisCacheAdapter($redis, 'users:');
+$apiCache = new RedisCacheAdapter($redis, 'api:');
+$sessionCache = new RedisCacheAdapter($redis, 'sessions:');
+
+// Monitor performance
+$stats = $cache->getStatistics();
+if ($stats['hit_ratio'] < 80) {
+    error_log("Cache hit ratio is low: {$stats['hit_ratio']}%");
+}
 ```
 
 ## Configuration

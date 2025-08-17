@@ -12,7 +12,7 @@ class ArrayCacheAdapter implements CacheItemPoolInterface
 {
     /** @var array<string, array<string, CacheItem>> */
     private array $cache = [];
-    /** @var array<string, CacheItem> */
+    /** @var array<string, \Psr\Cache\CacheItemInterface> */
     private array $deferred = [];
 
     // Cache statistics

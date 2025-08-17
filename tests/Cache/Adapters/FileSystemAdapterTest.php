@@ -27,7 +27,7 @@ class FileSystemAdapterTest extends TestCase
     {
         $this->cleanupTestCache();
         if (is_dir($this->tempDir)) {
-            rmdir($this->tempDir);
+            rrmdir($this->tempDir);
         }
     }
 
@@ -60,7 +60,7 @@ class FileSystemAdapterTest extends TestCase
         $this->assertTrue(is_dir($testDir));
 
         // Cleanup
-        rmdir($testDir);
+        rrmdir($testDir);
     }
 
     public function testConstructorThrowsExceptionOnInvalidDirectory(): void

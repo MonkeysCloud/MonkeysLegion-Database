@@ -16,6 +16,10 @@ final class Connection extends AbstractConnection
             return;
         }
 
+        if (empty($this->config) && !isset($this->config['dsn'])) {
+            throw new \InvalidArgumentException('MySQL connection configuration not found.');
+        }
+
         $c = $this->config;
 
         // Use provided DSN or build one from components
