@@ -131,12 +131,8 @@ class SQLiteConnectionTest extends TestCase
     public function testConnectWithInvalidDsnThrowsException(): void
     {
         $invalidConfig = [
-            'connections' => [
-                'sqlite' => [
-                    'dsn' => 'sqlite:/invalid/path/database.db',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'sqlite:/invalid/path/database.db',
+            'options' => []
         ];
 
         $connection = new Connection($invalidConfig);

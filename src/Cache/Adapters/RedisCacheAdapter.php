@@ -194,8 +194,15 @@ class RedisCacheAdapter implements CacheItemPoolInterface
     public function clear(): bool
     {
         try {
-            $keys = $this->redis->keys($this->prefix . '*');
-            if (!empty($keys) && is_array($keys)) {
+            $iterator = null;
+            $keys = [];
+            do {
+                $result = $this->redis->scan($iterator, $this->prefix . '*');
+                if ($result !== false) {
+                    $keys = array_merge($keys, $result);
+                }
+            } while ($iterator > 0);
+            if (!empty($keys)) {
                 $deleted = $this->redis->del($keys);
                 return is_int($deleted) && $deleted > 0;
             }
@@ -378,9 +385,15 @@ class RedisCacheAdapter implements CacheItemPoolInterface
     {
         try {
             $pattern = $this->prefix . $prefix . '*';
-            $keys = $this->redis->keys($pattern);
-
-            if (!empty($keys) && is_array($keys)) {
+            $iterator = null;
+            $keys = [];
+            do {
+                $batch = $this->redis->scan($iterator, $pattern);
+                if ($batch !== false) {
+                    $keys = array_merge($keys, $batch);
+                }
+            } while ($iterator > 0);
+            if (!empty($keys)) {
                 $deleted = $this->redis->del($keys);
                 return is_int($deleted) && $deleted > 0;
             }

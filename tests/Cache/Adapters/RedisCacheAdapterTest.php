@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 class RedisCacheAdapterTest extends TestCase
 {
     private ?\Redis $redis = null;
-    private ?RedisCacheAdapter $adapter = null;
+    private RedisCacheAdapter $adapter;
 
     protected function setUp(): void
     {
@@ -346,6 +346,7 @@ class RedisCacheAdapterTest extends TestCase
 
     public function testResetStatistics(): void
     {
+
         // Generate some statistics
         $item = new CacheItem('test_key');
         $item->set('test_value');
@@ -373,7 +374,6 @@ class RedisCacheAdapterTest extends TestCase
     public function testGetConnectionInfo(): void
     {
         $info = $this->adapter->getConnectionInfo();
-        $this->assertIsArray($info);
 
         if (!isset($info['error'])) {
             $this->assertArrayHasKey('redis_version', $info);
@@ -409,11 +409,6 @@ class RedisCacheAdapterTest extends TestCase
         $retrieved = $this->adapter->getItem('false_value');
         $this->assertTrue($retrieved->isHit());
         $this->assertFalse($retrieved->get());
-    }
-
-    private function createMockRedis(): \PHPUnit\Framework\MockObject\MockObject
-    {
-        return $this->createMock(\Redis::class);
     }
 
     private function isRedisAvailable(): bool

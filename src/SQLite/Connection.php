@@ -16,7 +16,7 @@ final class Connection extends AbstractConnection
             return;
         }
 
-        if (empty($this->config) && !isset($this->config['dsn'])) {
+        if (empty($this->config)) {
             throw new \InvalidArgumentException('SQLite connection configuration not found.');
         }
 

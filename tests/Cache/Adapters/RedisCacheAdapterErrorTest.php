@@ -82,7 +82,7 @@ class RedisCacheAdapterErrorTest extends TestCase
     {
         $redis = $this->createMock(\Redis::class);
         $redis->method('ping')->willReturn('PONG');
-        $redis->method('keys')->willThrowException(new \RedisException('Redis error'));
+        $redis->method('scan')->willThrowException(new \RedisException('Redis error'));
 
         $adapter = new RedisCacheAdapter($redis, 'test:');
 

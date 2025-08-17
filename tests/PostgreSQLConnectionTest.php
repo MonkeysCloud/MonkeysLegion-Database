@@ -51,14 +51,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testConnectWithInvalidConfig(): void
     {
         $invalidConfig = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=nonexistent;dbname=test',
-                    'username' => 'invalid',
-                    'password' => 'invalid',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=nonexistent;dbname=test',
+            'username' => 'invalid',
+            'password' => 'invalid',
+            'options' => []
         ];
 
         $connection = new Connection($invalidConfig);
@@ -70,14 +66,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testHostFallbackOnConnectionError(): void
     {
         $configWithBadHost = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=badhost;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=badhost;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => []
         ];
 
         $connection = new Connection($configWithBadHost);
@@ -107,14 +99,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testConnectionRefusedFallback(): void
     {
         $configWithLocalhost = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=localhost;port=9999;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=localhost;port=9999;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => []
         ];
 
         $connection = new Connection($configWithLocalhost);

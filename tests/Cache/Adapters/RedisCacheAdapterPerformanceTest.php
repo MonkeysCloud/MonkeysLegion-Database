@@ -57,15 +57,15 @@ class RedisCacheAdapterPerformanceTest extends TestCase
 
             $item = new CacheItem($key);
             $item->set("value_$i");
-            $this->adapter->saveDeferred($item);
+            $this->adapter?->saveDeferred($item);
         }
 
-        $this->adapter->commit();
+        $this->adapter?->commit();
         $batchSaveTime = microtime(true) - $startTime;
 
         // Test batch get via getItems
         $startTime = microtime(true);
-        $items = iterator_to_array($this->adapter->getItems($keys));
+        $items = iterator_to_array($this->adapter?->getItems($keys) ?: []);
         $batchGetTime = microtime(true) - $startTime;
 
         // Verify all items were saved and retrieved
@@ -89,16 +89,16 @@ class RedisCacheAdapterPerformanceTest extends TestCase
         $item->set($largeData);
 
         $startTime = microtime(true);
-        $result = $this->adapter->save($item);
+        $result = $this->adapter?->save($item);
         $saveTime = microtime(true) - $startTime;
 
         $this->assertTrue($result);
 
         $startTime = microtime(true);
-        $retrievedItem = $this->adapter->getItem('large_data');
+        $retrievedItem = $this->adapter?->getItem('large_data');
         $getTime = microtime(true) - $startTime;
 
-        $this->assertTrue($retrievedItem->isHit());
+        $this->assertTrue($retrievedItem?->isHit());
         $this->assertEquals($largeData, $retrievedItem->get());
 
         // Should handle large data efficiently

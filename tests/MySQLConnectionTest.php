@@ -92,14 +92,10 @@ class MySQLConnectionTest extends TestCase
     public function testHostFallbackLogic(): void
     {
         $configWithBadHost = [
-            'connections' => [
-                'mysql' => [
-                    'dsn' => 'mysql:host=badhost;dbname=test',
-                    'username' => 'root',
-                    'password' => '',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'mysql:host=badhost;dbname=test',
+            'username' => 'root',
+            'password' => '',
+            'options' => []
         ];
 
         $connection = new Connection($configWithBadHost);
