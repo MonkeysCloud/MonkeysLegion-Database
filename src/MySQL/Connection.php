@@ -35,7 +35,6 @@ final class Connection extends AbstractConnection
 
         // Enforce strict SQL and modern defaults
         $this->pdo->exec("SET NAMES utf8mb4, sql_mode='STRICT_TRANS_TABLES'");
-        error_log('MySQL connection established successfully.');
     }
 
     /**

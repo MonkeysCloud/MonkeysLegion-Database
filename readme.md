@@ -51,8 +51,9 @@ $config = [
 ];
 
 // You must pass only the sub-config specific to the DB type, not the whole config array
-$connection = new MySQLConnection($config['connections']['mysql']);
-$connection->connect();
+$connection = new MySQLConnection($config['connections']['mysql']); // No connection established yet
+
+// when calling pdo(), connect() method called automatically
 $pdo = $connection->pdo();
 ```
 
@@ -574,24 +575,26 @@ $dsn = SQLiteDsnBuilder::temporary()->build();
 ```php
 $connection = ConnectionFactory::create($config);
 
-// Connect
-$connection->connect();
-
-// Check status
-if ($connection->isConnected()) {
-    echo "Connected!";
+function healthCheck(Connection $connection): array
+{
+    return [
+        'connected' => $connection->isConnected(),
+        'alive' => $connection->isAlive()
+    ];
 }
 
-// Health check
-if ($connection->isAlive()) {
-    echo "Database is responsive!";
-}
+healthCheck($connection); // Returns ['connected' => false, 'alive' => false]
 
-// Get PDO instance
+// Get PDO instance, Connection got established after calling pdo()
 $pdo = $connection->pdo();
+
+healthCheck($connection); // Returns ['connected' => true, 'alive' => true]
 
 // Disconnect
 $connection->disconnect();
+
+healthCheck($connection); // Returns ['connected' => false, 'alive' => false]
+
 ```
 
 ### Host Fallback
