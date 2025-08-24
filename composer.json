@@ -15,7 +15,10 @@
   "autoload": {
     "psr-4": {
       "MonkeysLegion\\Database\\": "src/"
-    }
+    },
+    "files": [
+      "src/Support/Helpers.php"
+    ]
   },
   "extra": {
     "branch-alias": {

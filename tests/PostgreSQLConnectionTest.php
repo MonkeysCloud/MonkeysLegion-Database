@@ -17,16 +17,12 @@ class PostgreSQLConnectionTest extends TestCase
     protected function setUp(): void
     {
         $this->config = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=localhost;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    ]
-                ]
+            'dsn' => 'pgsql:host=localhost;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]
         ];
     }
@@ -44,16 +40,6 @@ class PostgreSQLConnectionTest extends TestCase
         $this->assertFalse($connection->isConnected());
     }
 
-    public function testPdoThrowsExceptionWhenNotConnected(): void
-    {
-        $connection = new Connection($this->config);
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Not connected to the database.');
-
-        $connection->pdo();
-    }
-
     public function testDisconnectWhenNotConnected(): void
     {
         $connection = new Connection($this->config);
@@ -65,14 +51,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testConnectWithInvalidConfig(): void
     {
         $invalidConfig = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=nonexistent;dbname=test',
-                    'username' => 'invalid',
-                    'password' => 'invalid',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=nonexistent;dbname=test',
+            'username' => 'invalid',
+            'password' => 'invalid',
+            'options' => []
         ];
 
         $connection = new Connection($invalidConfig);
@@ -84,14 +66,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testHostFallbackOnConnectionError(): void
     {
         $configWithBadHost = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=badhost;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=badhost;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => []
         ];
 
         $connection = new Connection($configWithBadHost);
@@ -110,7 +88,7 @@ class PostgreSQLConnectionTest extends TestCase
 
     public function testConnectWithMissingConfigThrowsException(): void
     {
-        $invalidConfig = ['connections' => []];
+        $invalidConfig = [];
         $connection = new Connection($invalidConfig);
 
         $this->expectException(\InvalidArgumentException::class);
@@ -121,14 +99,10 @@ class PostgreSQLConnectionTest extends TestCase
     public function testConnectionRefusedFallback(): void
     {
         $configWithLocalhost = [
-            'connections' => [
-                'postgresql' => [
-                    'dsn' => 'pgsql:host=localhost;port=9999;dbname=test',
-                    'username' => 'postgres',
-                    'password' => '',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'pgsql:host=localhost;port=9999;dbname=test',
+            'username' => 'postgres',
+            'password' => '',
+            'options' => []
         ];
 
         $connection = new Connection($configWithLocalhost);

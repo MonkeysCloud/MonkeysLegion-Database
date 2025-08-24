@@ -41,6 +41,10 @@ abstract class AbstractConnection implements ConnectionInterface
             $this->connect();
         }
 
+        if (!$this->pdo) {
+            throw new \RuntimeException('Database connection is not established');
+        }
+
         return $this->pdo;
     }
 
@@ -61,9 +65,13 @@ abstract class AbstractConnection implements ConnectionInterface
      */
     public function isAlive(): bool
     {
+        if ($this->pdo === null) {
+            return false;
+        }
+
         try {
-            return (bool) $this->pdo()->query('SELECT 1');
-        } catch (\Throwable $e) {
+            return (bool) $this->pdo->query('SELECT 1');
+        } catch (\Throwable) {
             return false;
         }
     }

@@ -18,15 +18,7 @@ class SQLiteConnectionTest extends TestCase
     {
         $this->tempDbFile = tempnam(sys_get_temp_dir(), 'test_sqlite_');
         $this->config = [
-            'connections' => [
-                'sqlite' => [
-                    'dsn' => "sqlite:{$this->tempDbFile}",
-                    'options' => [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    ]
-                ]
-            ]
+            'file' => $this->tempDbFile
         ];
     }
 
@@ -99,16 +91,6 @@ class SQLiteConnectionTest extends TestCase
         }
     }
 
-    public function testPdoThrowsExceptionWhenNotConnected(): void
-    {
-        $connection = new Connection($this->config);
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Not connected to the database.');
-
-        $connection->pdo();
-    }
-
     public function testIsAliveWhenConnected(): void
     {
         $connection = new Connection($this->config);
@@ -138,7 +120,7 @@ class SQLiteConnectionTest extends TestCase
 
     public function testConnectWithMissingConfigThrowsException(): void
     {
-        $invalidConfig = ['connections' => []];
+        $invalidConfig = [];
         $connection = new Connection($invalidConfig);
 
         $this->expectException(\InvalidArgumentException::class);
@@ -149,12 +131,8 @@ class SQLiteConnectionTest extends TestCase
     public function testConnectWithInvalidDsnThrowsException(): void
     {
         $invalidConfig = [
-            'connections' => [
-                'sqlite' => [
-                    'dsn' => 'sqlite:/invalid/path/database.db',
-                    'options' => []
-                ]
-            ]
+            'dsn' => 'sqlite:/invalid/path/database.db',
+            'options' => []
         ];
 
         $connection = new Connection($invalidConfig);

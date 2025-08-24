@@ -6,7 +6,6 @@ namespace MonkeysLegion\Database\Tests\Cache\Adapters;
 
 use MonkeysLegion\Database\Cache\Adapters\FileSystemAdapter;
 use MonkeysLegion\Database\Cache\Items\CacheItem;
-use MonkeysLegion\Database\Cache\Enum\Constants;
 use PHPUnit\Framework\TestCase;
 
 class ConcurrencySimulationTest extends TestCase
@@ -22,7 +21,7 @@ class ConcurrencySimulationTest extends TestCase
     {
         $this->cleanupTestCache();
         if (is_dir($this->tempDir)) {
-            rmdir($this->tempDir);
+            rrmdir($this->tempDir);
         }
     }
 
@@ -171,7 +170,7 @@ class ConcurrencySimulationTest extends TestCase
             'process_id' => 99999 // Different PID
         ];
         file_put_contents($lockFile, serialize($lockData));
-        
+
         // Should return stale data
         $retrievedItem = $adapter->getItem($key);
         $this->assertFalse($retrievedItem->isHit()); // Marked as miss
