@@ -29,4 +29,10 @@ class Constants
 
     /** Default cache TTL (Time To Live) in seconds (1 hour) */
     public const CACHE_DEFAULT_TTL = 3600;
+
+    /** Default cache item cleanup probability (100%) */
+    public const CACHE_CLEANUP_PROBABILITY = 100;
+
+    /** Default cache item cleanup interval in seconds (1 hour) */
+    public const CACHE_CLEANUP_INTERVAL = 3600;
 }

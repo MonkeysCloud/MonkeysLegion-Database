@@ -107,6 +107,73 @@ ConnectionInterface::class => function() {
 
 The package includes a high-performance PSR-16 compatible cache system with three adapters:
 
+### Cache Adapters Overview
+1. **Cache Factory**: A factory class for creating cache instances.
+2. **Array Cache Adapter**: An in-memory cache adapter ideal for development or single-request caching.
+3. **FileSystem Cache Adapter**: A persistent file-based cache with advanced concurrency protection and automatic cleanup.
+4. **Redis Cache Adapter**: A high-performance cache using Redis for distributed environments.
+
+## Cache Factory
+
+First, in your app (specifically in `config/cache.php`):
+
+```php
+return [
+    // The default cache driver to use: 'file', 'redis', or 'memory'
+    'default' => $_ENV['CACHE_DRIVER'] ?? 'file',
+
+    // Available cache drivers. Keys must match the CacheType enum values.
+    'drivers' => [
+        // File-based cache configuration
+        'file' => [
+            // Directory for cache files (optional, defaults to system temp)
+            'directory' => $_ENV['CACHE_FILE_DIRECTORY'] ?? '/path/to/cache',
+            // Optional: auto-cleanup settings, lock expiration, etc.
+            // 'auto_cleanup' => [
+            //     'enabled' => $_ENV['CACHE_FILE_AUTO_CLEANUP_ENABLED'] ?? true,
+            //     'probability' => $_ENV['CACHE_FILE_AUTO_CLEANUP_PROBABILITY'] ?? 1000,
+            //     'interval' => $_ENV['CACHE_FILE_AUTO_CLEANUP_INTERVAL'] ?? 3600,
+            // ],
+            // 'lock_expiration' => $_ENV['CACHE_FILE_LOCK_EXPIRATION'] ?? 30,
+        ],
+
+        // Redis cache configuration
+        'redis' => [
+            'host' => $_ENV['CACHE_REDIS_HOST'] ?? '127.0.0.1',
+            'port' => $_ENV['CACHE_REDIS_PORT'] ?? 6379,
+            // 'auth' => $_ENV['CACHE_REDIS_AUTH'] ?? 'your_password', // optional
+            // 'database' => $_ENV['CACHE_REDIS_DATABASE'] ?? 0,           // optional
+            // 'timeout' => $_ENV['CACHE_REDIS_TIMEOUT'] ?? 2.0,          // optional
+            // 'prefix' => $_ENV['CACHE_REDIS_PREFIX'] ?? 'myapp:',      // optional namespace prefix
+        ],
+
+        // In-memory array cache (no config needed)
+        'memcached' => [
+            // No options required
+        ],
+    ],
+];
+```
+Then, to use it:
+```php
+use MonkeysLegion\Database\Factory\CacheFactory;
+use MonkeysLegion\Database\Types\CacheType;
+
+$config = require base_path('config/cache.php');
+
+// Create cache instance based on config
+$cacheDriver = CacheFactory::create($config);
+
+// Or alternatively
+$cacheDriver = CacheFactory::createByType('file', $config);
+
+// Or specify by enum
+$cacheDriver = CacheFactory::createByEnum(
+    CacheType::FILE,
+    $config
+);
+```
+
 ### Array Cache Adapter
 
 An in-memory cache adapter ideal for development or single-request caching:

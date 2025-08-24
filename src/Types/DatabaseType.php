@@ -18,9 +18,9 @@ enum DatabaseType: string
     public static function fromString(string $type): self
     {
         return match (strtolower($type)) {
-            'mysql' => self::MYSQL,
-            'postgresql', 'postgres', 'pgsql' => self::POSTGRESQL,
-            'sqlite' => self::SQLITE,
+            self::MYSQL->value => self::MYSQL,
+            self::POSTGRESQL->value, 'postgres', 'pgsql' => self::POSTGRESQL,
+            self::SQLITE->value, 'sqlite' => self::SQLITE,
             default => throw new \InvalidArgumentException("Unsupported database type: {$type}")
         };
     }
@@ -42,9 +42,9 @@ enum DatabaseType: string
     public function getDriverName(): string
     {
         return match ($this) {
-            self::MYSQL => 'mysql',
-            self::POSTGRESQL => 'pgsql',
-            self::SQLITE => 'sqlite',
+            self::MYSQL => self::MYSQL->value,
+            self::POSTGRESQL => self::POSTGRESQL->value,
+            self::SQLITE => self::SQLITE->value,
         };
     }
 
