@@ -31,18 +31,55 @@ class FileSystemAdapter implements CacheItemPoolInterface
     ];
 
     // Auto-cleanup settings
-    private bool $autoCleanup = true;
-    private int $cleanupProbability = 100; // 1 in 100 chance per operation
+    private bool $autoCleanup;
+    private int $cleanupProbability;
+    private int $cleanupInterval;
     private int $lastCleanup = 0;
-    private int $cleanupInterval = 3600; // 1 hour
 
-    public function __construct(?string $directory = null)
-    {
-        $this->directory = $directory ? $directory . '/var/cache' : sys_get_temp_dir() . '/cache';
+    public function __construct(
+        ?string $directory = null,
+        bool $autoCleanup = true,
+        int $cleanupProbability = 100,
+        int $cleanupInterval = 3600
+    ) {
+        $this->directory = $directory ? rtrim($directory, '/') . '/var/cache' : sys_get_temp_dir() . '/cache';
+        $this->autoCleanup = $autoCleanup;
+        $this->cleanupProbability = $cleanupProbability;
+        $this->cleanupInterval = $cleanupInterval;
 
         if (!is_dir($this->directory) && !@mkdir($this->directory, 0755, true)) {
             throw new CacheException("Cannot create cache directory: {$this->directory}");
         }
+    }
+
+    public function setAutoCleanup(bool $enabled): void
+    {
+        $this->autoCleanup = $enabled;
+    }
+
+    public function isAutoCleanupEnabled(): bool
+    {
+        return $this->autoCleanup;
+    }
+
+    public function setCleanupProbability(int $probability): void
+    {
+        $this->cleanupProbability = $probability;
+    }
+
+    public function getCleanupProbability(): int
+    {
+        return $this->cleanupProbability;
+    }
+
+    public function setCleanupInterval(int $interval): void
+    {
+        $this->cleanupInterval = $interval;
+    }
+
+    public function getCleanupInterval(): int
+    {
+        return $this->cleanupInterval;
     }
 
     public function getItem(string $key): CacheItem
