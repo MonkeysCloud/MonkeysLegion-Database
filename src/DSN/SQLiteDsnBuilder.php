@@ -25,9 +25,60 @@ class SQLiteDsnBuilder extends AbstractDsnBuilder
         return $this;
     }
 
+    /**
+     * Configure from an array that may contain 'path', 'memory', and other options
+     * @param array<string, mixed> $config
+     * @return static
+     */
+    public function fromConfig(array $config): static
+    {
+        // Handle path or memory setting
+        if (isset($config['memory']) && $config['memory'] === true) {
+            $this->memory();
+        } elseif (isset($config['path'])) {
+            $this->file((string)$config['path']);
+        }
+
+        // Handle other SQLite options
+        $options = array_diff_key($config, ['path' => null, 'memory' => null]);
+        foreach ($options as $key => $value) {
+            $this->setOption($key, $value);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set a SQLite-specific option
+     * @param string $key
+     * @param mixed $value
+     * @return static
+     */
+    public function setOption(string $key, mixed $value): static
+    {
+        // Store non-path options separately
+        if ($key !== 'path') {
+            $this->parameters[$key] = (string)$value;
+        }
+        return $this;
+    }
+
     protected function buildParameterString(): string
     {
-        return implode('', $this->parameters);
+        if (!isset($this->parameters['path'])) {
+            throw new \RuntimeException('SQLite path not set.');
+        }
+
+        $path = $this->parameters['path'];
+
+        // For in-memory DB, PDO expects 'sqlite::memory:'
+        if ($path === ':memory:') {
+            return ':memory:';
+        }
+
+        // For file-based DB, we only return the path as SQLite doesn't support
+        // additional parameters in the DSN like other databases
+        return $path;
     }
 
     public static function create(): static
@@ -59,5 +110,15 @@ class SQLiteDsnBuilder extends AbstractDsnBuilder
             throw new \RuntimeException('Failed to create a temporary SQLite file.');
         }
         return static::create()->file($tempFile);
+    }
+
+    /**
+     * Create a DSN builder from configuration array
+     * @param array<string, mixed> $config
+     * @return static
+     */
+    public static function fromConfigArray(array $config): static
+    {
+        return static::create()->fromConfig($config);
     }
 }

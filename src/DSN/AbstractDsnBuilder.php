@@ -13,6 +13,11 @@ abstract class AbstractDsnBuilder
      */
     protected array $parameters = [];
 
+    /**
+     * @var array<string, string|int>
+     */
+    protected array $options = [];
+
     public function build(): string
     {
         return $this->getDatabaseType()->getDriverName() . ':' . $this->buildParameterString();
@@ -29,12 +34,6 @@ abstract class AbstractDsnBuilder
         ));
     }
 
-    public function reset(): static
-    {
-        $this->parameters = [];
-        return $this;
-    }
-
     /**
      * Get the parameters used to build the DSN.
      *
@@ -43,5 +42,22 @@ abstract class AbstractDsnBuilder
     public function getParameters(): array
     {
         return $this->parameters;
+    }
+
+    /**
+     * Get the options that are not part of the DSN but may be used for connection configuration
+     *
+     * @return array<string, string|int>
+     */
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+
+    public function reset(): static
+    {
+        $this->parameters = [];
+        $this->options = [];
+        return $this;
     }
 }
