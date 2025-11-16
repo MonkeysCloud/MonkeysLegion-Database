@@ -69,8 +69,8 @@ final class CacheFactory
                 $redisClient = new \Redis();
                 $redisClient->connect(
                     $config['host'] ?? '127.0.0.1',
-                    $config['port'] ?? 6379,
-                    $config['timeout'] ?? 2.0
+                    (int)($config['port'] ?? 6379),
+                    (float)($config['timeout'] ?? 2.0)
                 );
 
                 if (!empty($config['password'])) {

@@ -525,6 +525,16 @@ class FileSystemAdapter implements CacheItemPoolInterface
      *
      * @return float
      */
+    public function getHitRatio(): float
+    {
+        return $this->calculateHitRatio();
+    }
+
+    /**
+     * Calculate hit ratio as percentage.
+     *
+     * @return float
+     */
     private function calculateHitRatio(): float
     {
         $total = $this->statistics['hits'] + $this->statistics['misses'];

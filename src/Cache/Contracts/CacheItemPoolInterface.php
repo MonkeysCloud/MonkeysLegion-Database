@@ -4,28 +4,39 @@ declare(strict_types=1);
 
 namespace MonkeysLegion\Database\Cache\Contracts;
 
+use MonkeysLegion\Database\Cache\Items\CacheItem;
 use Psr\Cache\CacheItemPoolInterface as PsrCacheItemPoolInterface;
-use Psr\Cache\CacheItemInterface;
 
 interface CacheItemPoolInterface extends PsrCacheItemPoolInterface
 {
-    /**
-     * Clear cache items by prefix.
-     *
-     * @param string $prefix
-     * @return bool
-     */
-    public function clearByPrefix(string $prefix): bool;
+    public function getItem(string $key): CacheItem;
 
     /**
-     * Get cache statistics.
-     *
-     * @return array<string, mixed>
+     * @param array<string> $keys
+     * @return iterable<string, \Psr\Cache\CacheItemInterface>
      */
+    public function getItems(array $keys = []): iterable;
+
+    public function hasItem(string $key): bool;
+
+    public function save(\Psr\Cache\CacheItemInterface $item): bool;
+
+    public function saveDeferred(\Psr\Cache\CacheItemInterface $item): bool;
+
+    public function commit(): bool;
+
+    public function deleteItem(string $key): bool;
+
+    /**
+     * @param array<string> $keys
+     */
+    public function deleteItems(array $keys): bool;
+
+    public function clear(): bool;
+
     public function getStatistics(): array;
 
-    /**
-     * Reset cache statistics.
-     */
     public function resetStatistics(): void;
+
+    public function getHitRatio(): float;
 }
