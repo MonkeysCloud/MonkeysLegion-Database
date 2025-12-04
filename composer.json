@@ -5,12 +5,16 @@
   "license": "MIT",
   "minimum-stability": "dev",
   "prefer-stable": true,
+  "authors": [
+    {
+      "name": "MonkeysCloud",
+      "email": "jorge@monkeys.cloud"
+    }
+  ],
   "require": {
     "php": "^8.4",
     "ext-pdo_mysql": "*",
-    "monkeyscloud/monkeyslegion-core": "^1.0",
-    "monkeyscloud/monkeyslegion-di": "^1.0",
-    "psr/cache": "^3.0"
+    "monkeyscloud/monkeyslegion-cache": "^1.0.x-dev"
   },
   "autoload": {
     "psr-4": {

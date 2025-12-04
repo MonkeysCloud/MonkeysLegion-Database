@@ -140,4 +140,42 @@ class SQLiteConnectionTest extends TestCase
         $this->expectException(\Throwable::class);
         $connection->connect();
     }
+
+    public function testPdoAutoConnectsSuccessfully(): void
+    {
+        $connection = new Connection($this->config);
+        $this->assertFalse($connection->isConnected());
+        
+        // For SQLite, pdo() should successfully auto-connect
+        $pdo = $connection->pdo();
+        
+        $this->assertInstanceOf(PDO::class, $pdo);
+        $this->assertTrue($connection->isConnected());
+    }
+
+    public function testInMemoryDatabase(): void
+    {
+        $config = ['memory' => true];
+        $connection = new Connection($config);
+        $connection->connect();
+
+        $this->assertTrue($connection->isConnected());
+        $this->assertInstanceOf(PDO::class, $connection->pdo());
+    }
+
+    public function testBuildDsnFromConfigComponents(): void
+    {
+        $config = ['file' => '/tmp/test.db'];
+        $connection = new Connection($config);
+        
+        // Connect will create the file if it doesn't exist
+        $connection->connect();
+        $this->assertTrue($connection->isConnected());
+        $connection->disconnect();
+        
+        // Clean up
+        if (file_exists('/tmp/test.db')) {
+            unlink('/tmp/test.db');
+        }
+    }
 }
