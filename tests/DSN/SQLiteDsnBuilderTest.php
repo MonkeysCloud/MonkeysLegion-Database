@@ -29,7 +29,7 @@ class SQLiteDsnBuilderTest extends TestCase
 
         $this->assertStringStartsWith('sqlite:', $dsn);
         // Check that it contains a temporary file path (works on both Windows and Unix)
-        $this->assertMatchesRegularExpression('/sqlite:.*[\/\\\\].*\.tmp/', $dsn);
+        $this->assertMatchesRegularExpression('/sqlite:.*[\/\\\\]sqlite_.*$/', $dsn);
     }
 
     public function testFluentInterface(): void

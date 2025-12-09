@@ -71,6 +71,11 @@ class SQLiteDsnBuilder extends AbstractDsnBuilder
 
         $path = $this->parameters['path'];
 
+        // Ensure $path is a string for type safety
+        if (!is_string($path)) {
+            throw new \RuntimeException('SQLite path must be a string.');
+        }
+
         // For in-memory DB, PDO expects 'sqlite::memory:'
         if ($path === ':memory:') {
             return ':memory:';

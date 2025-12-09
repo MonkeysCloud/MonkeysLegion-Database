@@ -110,4 +110,19 @@ class PostgreSQLConnectionTest extends TestCase
         $this->expectException(PDOException::class);
         $connection->connect();
     }
+
+    public function testPdoAutoConnects(): void
+    {
+        $connection = new Connection($this->config);
+        $this->assertFalse($connection->isConnected());
+        
+        // pdo() should throw exception when auto-connect fails
+        try {
+            $connection->pdo();
+            $this->fail('Expected PDOException or RuntimeException');
+        } catch (\PDOException | \RuntimeException $e) {
+            // Expected - connection will fail with invalid config or missing driver
+            $this->assertTrue(true);
+        }
+    }
 }

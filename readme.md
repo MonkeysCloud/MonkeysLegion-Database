@@ -2,7 +2,6 @@
 
 A flexible PDO-based database abstraction layer supporting MySQL, PostgreSQL, and SQLite with elegant DSN builders and connection management.
 
-
 ## Features
 
 - ✅ **Multi-Database Support**: MySQL, PostgreSQL, SQLite
@@ -13,10 +12,10 @@ A flexible PDO-based database abstraction layer supporting MySQL, PostgreSQL, an
 - ✅ **Factory Pattern**: Flexible connection creation
 - ✅ **Docker Ready**: Built-in support for containerized environments
 - ✅ **Zero Dependencies**: Pure PDO implementation
-- ✅ **High-Performance Caching**: Array, FileSystem, and Redis cache adapters
-- ✅ **Concurrency Protection**: Lock-based stale-while-revalidate pattern
-- ✅ **Automatic Cleanup**: Intelligent cache maintenance and monitoring
-- ✅ **PSR Compatible**: Follows PSR-16 caching standards
+- ✅ **Advanced Caching**: Integrates with MonkeysLegion Cache package
+- ✅ **Multi-Store Support**: File, Redis, Array, and Memcached cache stores
+- ✅ **Cache Tagging**: Group and manage related cache entries
+- ✅ **Cache Bridge**: Prefix-based isolation for database-specific caching
 
 ## Installation
 
@@ -81,6 +80,7 @@ $connection = ConnectionFactory::createByEnum(
 ### 3. Dependency Injection Container Setup
 
 #### Old Way (Direct Connection)
+
 ```php
 // Before
 Connection::class => fn() => new Connection(
@@ -89,6 +89,7 @@ Connection::class => fn() => new Connection(
 ```
 
 #### New Way (Factory Pattern)
+
 ```php
 // Register interface with factory
 ConnectionInterface::class => fn() =>
@@ -98,453 +99,387 @@ ConnectionInterface::class => fn() =>
 ConnectionInterface::class => function() {
     $config = require base_path('config/database.php');
     $type = env('DB_CONNECTION', 'mysql');
-    
+
     return ConnectionFactory::createByType($type, $config);
 }
 ```
 
 ## Cache System
 
-The package includes a high-performance PSR-16 compatible cache system with three adapters:
+The database package integrates with the **MonkeysLegion Cache** package through a bridge adapter, providing access to all advanced caching features including tagging, atomic operations, and multiple store drivers.
 
-### Cache Adapters Overview
-1. **Cache Factory**: A factory class for creating cache instances.
-2. **Array Cache Adapter**: An in-memory cache adapter ideal for development or single-request caching.
-3. **FileSystem Cache Adapter**: A persistent file-based cache with advanced concurrency protection and automatic cleanup.
-4. **Redis Cache Adapter**: A high-performance cache using Redis for distributed environments.
+### Architecture Overview
 
-## Cache Factory
+The cache system uses a **bridge pattern** to delegate all cache operations to the `monkeyslegion-cache` package:
 
-First, in your app (specifically in `config/cache.php`):
+```
+Database Package (CacheManagerBridge)
+        ↓ delegates to
+MonkeysLegion Cache Package (CacheManager)
+        ↓ uses
+Cache Stores (File, Redis, Array, Memcached)
+```
+
+## Quick Start
+
+### 1. Basic Setup
 
 ```php
-return [
-    // The default cache driver to use: 'file', 'redis', or 'memory'
-    'default' => $_ENV['CACHE_DRIVER'] ?? 'file',
+use MonkeysLegion\Cache\CacheManager;
+use MonkeysLegion\Database\Cache\CacheManagerBridge;
 
-    // Available cache drivers. Keys must match the CacheType enum values.
-    'drivers' => [
-        // File-based cache configuration
+// Configure cache manager from monkeyslegion-cache package
+$cacheConfig = [
+    'default' => 'file',
+    'stores' => [
         'file' => [
-            // Directory for cache files (optional, defaults to system temp)
-            'directory' => $_ENV['CACHE_FILE_DIRECTORY'] ?? '/path/to/cache',
-            // Optional: auto-cleanup settings, lock expiration, etc.
-            // 'auto_cleanup' => [
-            //     'enabled' => $_ENV['CACHE_FILE_AUTO_CLEANUP_ENABLED'] ?? true,
-            //     'probability' => $_ENV['CACHE_FILE_AUTO_CLEANUP_PROBABILITY'] ?? 1000,
-            //     'interval' => $_ENV['CACHE_FILE_AUTO_CLEANUP_INTERVAL'] ?? 3600,
-            // ],
-            // 'lock_expiration' => $_ENV['CACHE_FILE_LOCK_EXPIRATION'] ?? 30,
+            'driver' => 'file',
+            'path' => '/path/to/cache',
+            'prefix' => 'app_'
         ],
-
-        // Redis cache configuration
         'redis' => [
-            'host' => $_ENV['CACHE_REDIS_HOST'] ?? '127.0.0.1',
-            'port' => $_ENV['CACHE_REDIS_PORT'] ?? 6379,
-            // 'auth' => $_ENV['CACHE_REDIS_AUTH'] ?? 'your_password', // optional
-            // 'database' => $_ENV['CACHE_REDIS_DATABASE'] ?? 0,           // optional
-            // 'timeout' => $_ENV['CACHE_REDIS_TIMEOUT'] ?? 2.0,          // optional
-            // 'prefix' => $_ENV['CACHE_REDIS_PREFIX'] ?? 'myapp:',      // optional namespace prefix
+            'driver' => 'redis',
+            'host' => '127.0.0.1',
+            'port' => 6379,
+            'prefix' => 'app_'
+        ],
+        'array' => [
+            'driver' => 'array',
+            'prefix' => 'app_'
+        ]
+    ]
+];
+
+$cacheManager = new CacheManager($cacheConfig);
+
+// Create bridge with optional prefix for database-specific caching
+$cache = new CacheManagerBridge($cacheManager, 'db:');
+```
+
+### 2. Basic Cache Operations
+
+```php
+// Store data (prefix automatically applied)
+$cache->set('user:123', $userData, 3600); // Stored as 'db:user:123'
+
+// Retrieve data
+$userData = $cache->get('user:123', $default = null);
+
+// Check existence
+if ($cache->has('user:123')) {
+    echo "User cached!";
+}
+
+// Delete
+$cache->delete('user:123');
+
+// Clear all cache
+$cache->clear();
+```
+
+### 3. Batch Operations
+
+```php
+// Get multiple values
+$values = $cache->getMultiple(['user:1', 'user:2', 'user:3']);
+
+// Set multiple values
+$cache->setMultiple([
+    'user:1' => $user1Data,
+    'user:2' => $user2Data,
+    'user:3' => $user3Data
+], 3600);
+
+// Delete multiple
+$cache->deleteMultiple(['user:1', 'user:2', 'user:3']);
+```
+
+## Advanced Features
+
+### Remember Pattern (Cache-or-Compute)
+
+```php
+// Cache expensive operations automatically
+$queryResult = $cache->remember('expensive_query', 3600, function() {
+    return expensiveOperation();
+});
+
+// First call: executes callback and caches result
+// Subsequent calls: returns cached value
+```
+
+### Atomic Operations
+
+```php
+// Increment/decrement counters
+$cache->increment('page_views', 1);  // Returns new value
+$cache->decrement('stock_count', 5); // Returns new value
+
+// Add only if not exists
+if ($cache->add('user:123', $userData, 3600)) {
+    echo "User cached for first time!";
+}
+
+// Get and delete in one operation
+$value = $cache->pull('temporary_token'); // Returns value and deletes
+```
+
+### Permanent Storage
+
+```php
+// Store without expiration
+$cache->forever('app_config', $configData);
+```
+
+## Multi-Store Support
+
+Switch between different cache stores dynamically:
+
+```php
+// Use Redis for sessions
+$sessionCache = $cache->store('redis');
+$sessionCache->set('session:abc123', $sessionData, 1800);
+
+// Use file cache for API responses
+$apiCache = $cache->store('file');
+$apiCache->set('api:weather', $weatherData, 300);
+
+// Use array cache for request-scoped data
+$requestCache = $cache->store('array');
+$requestCache->set('current_user', $user);
+```
+
+## Cache Tagging
+
+Group related cache entries for bulk operations:
+
+```php
+// Tag cache entries
+$cache->tags(['users', 'profiles'])->set('user:123:profile', $profileData, 3600);
+$cache->tags(['users', 'posts'])->set('user:123:posts', $postsData, 3600);
+
+// Clear all user-related cache
+$cache->tags(['users'])->clear();
+
+// Tags work with all operations
+$cache->tags(['api', 'v1'])->remember('endpoint:data', 300, function() {
+    return fetchApiData();
+});
+```
+
+## Prefix Management
+
+The bridge supports prefix customization for namespace isolation:
+
+```php
+// Create bridge with custom prefix
+$dbCache = new CacheManagerBridge($cacheManager, 'database:');
+$dbCache->set('query:123', $result); // Stored as 'database:query:123'
+
+// No prefix (uses underlying cache manager's prefix only)
+$cache = new CacheManagerBridge($cacheManager);
+$cache->set('key', 'value'); // Stored as 'key' (or manager's prefix + 'key')
+
+// Get configured prefix
+echo $dbCache->getPrefix(); // 'database:
+```
+
+### Clear by Prefix
+
+```php
+// Clear all database query cache
+$cache->clearByPrefix('query:'); // Clears 'db:query:*'
+
+// Note: Support depends on underlying store
+// - File store: Direct prefix clearing
+// - Redis/Tagged stores: Uses tagging
+// - Others: May not support prefix clearing
+```
+
+## Connection Health
+
+```php
+// Check if cache is operational
+if ($cache->isConnected()) {
+    echo "Cache is working!";
+} else {
+    echo "Cache unavailable, falling back...";
+}
+```
+
+## Cache Statistics
+
+```php
+// Get cache statistics
+$stats = $cache->getStatistics();
+
+// Available stats depend on the underlying store:
+// - driver: Cache driver class name
+// - prefix: Configured prefix
+// - connected: Connection status
+// - hits/misses: Performance metrics (if supported)
+// - redis_version: Redis info (if using Redis)
+```
+
+## Available Cache Stores
+
+The underlying `monkeyslegion-cache` package provides multiple store drivers:
+
+### File Store (Recommended for Single-Server)
+
+```php
+'stores' => [
+    'file' => [
+        'driver' => 'file',
+        'path' => '/var/cache/app',
+        'prefix' => 'app_'
+    ]
+]
+```
+
+**Features:**
+
+- ✅ Persistent storage
+- ✅ No external dependencies
+- ✅ Automatic cleanup
+- ✅ Lock-based concurrency
+- ✅ Prefix-based clearing
+
+### Redis Store (Recommended for Distributed)
+
+```php
+'stores' => [
+    'redis' => [
+        'driver' => 'redis',
+        'host' => 'localhost',
+        'port' => 6379,
+        'password' => null,
+        'database' => 0,
+        'prefix' => 'app_'
+    ]
+]
+```
+
+**Features:**
+
+- ✅ Distributed caching
+- ✅ Atomic operations
+- ✅ High performance
+- ✅ Cache tagging support
+- ✅ Pub/sub capabilities
+
+### Array Store (Development/Testing)
+
+```php
+'stores' => [
+    'array' => [
+        'driver' => 'array',
+        'prefix' => 'test_'
+    ]
+]
+```
+
+**Features:**
+
+- ✅ In-memory (fast)
+- ✅ No setup required
+- ✅ Request-scoped
+- ❌ Not persistent
+- ❌ Not shared across processes
+
+### Memcached Store
+
+```php
+'stores' => [
+    'memcached' => [
+        'driver' => 'memcached',
+        'servers' => [
+            ['host' => '127.0.0.1', 'port' => 11211, 'weight' => 100]
+        ],
+        'prefix' => 'app_'
+    ]
+]
+```
+
+## Bridge-Specific Methods
+
+The `CacheManagerBridge` provides additional methods:
+
+```php
+// Get the underlying cache manager for advanced operations
+$manager = $cache->getCacheManager();
+$manager->purge(); // Use any CacheManager method
+
+// Get configured prefix
+$prefix = $cache->getPrefix();
+```
+
+### Production Cache Configuration
+
+```php
+// config/cache.php
+return [
+    'default' => env('CACHE_DRIVER', 'file'),
+
+    'stores' => [
+        'file' => [
+            'driver' => 'file',
+            'path' => storage_path('framework/cache/data'),
+            'prefix' => 'app_cache'
         ],
 
-        // In-memory array cache (no config needed)
+        'redis' => [
+            'driver' => 'redis',
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'port' => env('REDIS_PORT', 6379),
+            'password' => env('REDIS_PASSWORD'),
+            'database' => env('REDIS_DB', 0),
+            'prefix' => 'app_cache'
+        ],
+
+        'array' => [
+            'driver' => 'array',
+            'prefix' => 'test_'
+        ],
+
         'memcached' => [
-            // No options required
+            'driver' => 'memcached',
+            'persistent_id' => env('MEMCACHED_PERSISTENT_ID'),
+            'servers' => [
+                [
+                    'host' => env('MEMCACHED_HOST', '127.0.0.1'),
+                    'port' => env('MEMCACHED_PORT', 11211),
+                    'weight' => 100,
+                ],
+            ],
+            'prefix' => 'app_cache'
         ],
     ],
 ];
 ```
-Then, to use it:
-```php
-use MonkeysLegion\Database\Factory\CacheFactory;
-use MonkeysLegion\Database\Types\CacheType;
 
-$config = require base_path('config/cache.php');
-
-// Create cache instance based on config
-$cacheDriver = CacheFactory::create($config);
-
-// Or alternatively
-$cacheDriver = CacheFactory::createByType('file', $config);
-
-// Or specify by enum
-$cacheDriver = CacheFactory::createByEnum(
-    CacheType::FILE,
-    $config
-);
-```
-
-### Array Cache Adapter
-
-An in-memory cache adapter ideal for development or single-request caching:
+### Usage in Your Application
 
 ```php
-use MonkeysLegion\Database\Cache\Adapters\ArrayCacheAdapter;
-use MonkeysLegion\Database\Cache\Items\CacheItem;
+use MonkeysLegion\Cache\CacheManager;
+use MonkeysLegion\Database\Cache\CacheManagerBridge;
 
-$cache = new ArrayCacheAdapter();
+// Load configuration
+$config = require 'config/cache.php';
 
-// Basic operations
-$item = new CacheItem('user_123');
-$item->set(['name' => 'John Doe', 'email' => 'john@example.com']);
-$item->expiresAfter(300); // 5 minutes
+// Create cache manager
+$cacheManager = new CacheManager($config);
 
-$cache->save($item);
+// Create bridge for database-specific caching
+$dbCache = new CacheManagerBridge($cacheManager, 'db:');
 
-// Retrieve item
-$cachedItem = $cache->getItem('user_123');
-if ($cachedItem->isHit()) {
-    $userData = $cachedItem->get();
-}
-
-// Batch operations
-$cache->saveDeferred($item1);
-$cache->saveDeferred($item2);
-$cache->commit(); // Save all deferred items
-
-// Statistics
-$stats = $cache->getStatistics();
-echo "Hit ratio: " . $stats['hit_ratio'] . "%\n";
+// Use in your application
+$queryResult = $dbCache->remember('heavy_query', 3600, function() {
+    return executeExpensiveQuery();
+});
 ```
 
-### FileSystem Cache Adapter
-
-A persistent file-based cache with advanced concurrency protection and automatic cleanup:
-
-```php
-use MonkeysLegion\Database\Cache\Adapters\FileSystemAdapter;
-use MonkeysLegion\Database\Cache\Items\CacheItem;
-
-// Initialize with custom directory (optional)
-$cache = new FileSystemAdapter('/path/to/cache/dir');
-// Or use system temp directory
-$cache = new FileSystemAdapter();
-
-// Basic caching
-$item = new CacheItem('expensive_query_result');
-$item->set($queryResult);
-$item->expiresAfter(3600); // 1 hour
-
-$cache->save($item);
-
-// Retrieve with automatic expiration handling
-$cachedItem = $cache->getItem('expensive_query_result');
-if ($cachedItem->isHit()) {
-    return $cachedItem->get(); // Fresh data
-}
-
-// If cache miss or expired, regenerate data
-$freshData = expensiveOperation();
-$item->set($freshData);
-$cache->save($item);
-```
-
-#### Advanced FileSystem Cache Features
-
-**1. Concurrency Protection & Stale-While-Revalidate**
-
-The FileSystem adapter implements a sophisticated lock-based concurrency system that prevents cache stampedes while serving stale data for optimal performance:
-
-```php
-// Process A: Cache expires, starts regenerating with lock
-$item = $cache->getItem('heavy_computation');
-if (!$item->isHit()) {
-    // Creates lock file automatically during save
-    $newData = heavyComputation(); // Takes 10 seconds
-    $item->set($newData);
-    $cache->save($item); // Lock is released after save
-}
-
-// Process B: During Process A's computation
-$item = $cache->getItem('heavy_computation');
-// Returns stale data immediately (marked as miss but has value)
-// No waiting, no duplicate computation
-if ($item->get() !== null) {
-    return $item->get(); // Stale but valid data
-}
-```
-
-**Lock Logic:**
-- When cache expires, the first process creates a lock file with its process ID
-- Other processes check if lock exists and belongs to different process
-- If different process lock exists: return stale data immediately (no waiting)
-- If same process lock exists: proceed with cache regeneration
-- Locks auto-expire to prevent deadlocks
-
-**2. Prefix-Based Operations**
-
-```php
-// Save items with prefixes
-$cache->save(new CacheItem('user_123'));
-$cache->save(new CacheItem('user_456'));
-$cache->save(new CacheItem('post_789'));
-
-// Clear all user cache
-$cache->clearByPrefix('user_'); // Only removes user_* items
-
-// Statistics show cache organization
-$stats = $cache->getStatistics();
-echo "Total cache files: " . $stats['cache_files'] . "\n";
-echo "Cache size: " . $stats['cache_size_bytes'] . " bytes\n";
-```
-
-**3. Automatic Cleanup System**
-
-The adapter includes intelligent cleanup that runs automatically:
-
-```php
-// Configure cleanup behavior
-$cache->configureAutoCleanup(
-    enabled: true,
-    probability: 100,    // 1 in 100 chance per operation
-    interval: 3600       // Full cleanup every hour
-);
-
-// Manual cleanup with detailed stats
-$cleanupStats = $cache->runFullCleanup();
-echo "Removed {$cleanupStats['expired_cache_files']} expired files\n";
-echo "Freed {$cleanupStats['total_freed_bytes']} bytes\n";
-echo "Cleaned {$cleanupStats['corrupted_files']} corrupted files\n";
-```
-
-**4. Cache Statistics & Monitoring**
-
-```php
-$stats = $cache->getStatistics();
-
-echo "Performance:\n";
-echo "  Hit Ratio: {$stats['hit_ratio']}%\n";
-echo "  Total Operations: {$stats['total_operations']}\n";
-echo "  Hits: {$stats['hits']}, Misses: {$stats['misses']}\n";
-
-echo "\nConcurrency:\n";
-echo "  Stale Returns: {$stats['stale_returns']}\n";
-echo "  Lock Waits: {$stats['lock_waits']}\n";
-echo "  Lock Timeouts: {$stats['lock_timeouts']}\n";
-
-echo "\nStorage:\n";
-echo "  Cache Files: {$stats['cache_files']}\n";
-echo "  Lock Files: {$stats['lock_files']}\n";
-echo "  Total Size: {$stats['cache_size_bytes']} bytes\n";
-
-// Reset stats for monitoring periods
-$cache->resetStatistics();
-```
-
-**5. File Organization Strategy**
-
-The adapter uses a smart file naming strategy for optimal performance:
-
-```php
-// Keys like 'user_123', 'user_456' get organized by prefix
-// Files: <prefix_hash>_<key_hash>.cache
-// Example: a1b2c3_d4e5f6.cache, a1b2c3_g7h8i9.cache
-
-// This allows:
-// - Fast prefix-based clearing (glob by prefix hash)
-// - Collision prevention (full key hash)
-// - Directory organization (related items cluster)
-```
-
-#### Cache Configuration Best Practices
-
-```php
-// Production settings
-$cache = new FileSystemAdapter('/var/cache/app');
-$cache->configureAutoCleanup(
-    enabled: true,
-    probability: 1000,   // Less frequent cleanup (1 in 1000)
-    interval: 7200       // Cleanup every 2 hours
-);
-$cache->setLockExpiration(30); // 30 second lock timeout
-
-// Development settings
-$cache = new FileSystemAdapter();
-$cache->configureAutoCleanup(
-    enabled: true,
-    probability: 10,     // More frequent cleanup (1 in 10)
-    interval: 300        // Cleanup every 5 minutes
-);
-```
-
-### Redis Cache Adapter
-
-A high-performance distributed cache adapter using Redis for scalable applications:
-
-```php
-use MonkeysLegion\Database\Cache\Adapters\RedisCacheAdapter;
-use MonkeysLegion\Database\Cache\Items\CacheItem;
-
-// Method 1: Using existing Redis connection
-$redis = new \Redis();
-$redis->connect('127.0.0.1', 6379);
-$cache = new RedisCacheAdapter($redis, 'myapp:');
-
-// Method 2: Using factory method (recommended)
-$cache = new RedisCacheAdapter(
-    RedisCacheAdapter::createConnection(
-        host: 'localhost',
-        port: 6379,
-        auth: 'password',      // optional
-        database: 0           // optional
-    ),
-    'myapp:'
-);
-
-// Basic caching
-$item = new CacheItem('user_session_123');
-$item->set(['user_id' => 123, 'roles' => ['admin']]);
-$item->expiresAfter(1800); // 30 minutes
-
-$cache->save($item);
-
-// Retrieve cached data
-$cachedItem = $cache->getItem('user_session_123');
-if ($cachedItem->isHit()) {
-    $sessionData = $cachedItem->get();
-}
-```
-
-#### Advanced Redis Cache Features
-
-**1. High-Performance Batch Operations**
-
-```php
-// Efficient multi-get using Redis MGET
-$items = $cache->getItems(['user_1', 'user_2', 'user_3']);
-foreach ($items as $key => $item) {
-    if ($item->isHit()) {
-        echo "User {$key}: " . json_encode($item->get()) . "\n";
-    }
-}
-
-// Efficient multi-delete
-$cache->deleteItems(['user_1', 'user_2', 'user_3']);
-
-// Pipeline commits for better performance
-$cache->saveDeferred($item1);
-$cache->saveDeferred($item2);
-$cache->saveDeferred($item3);
-$cache->commit(); // All saved in single pipeline
-```
-
-**2. Connection Management & Health Monitoring**
-
-```php
-// Check connection health
-if ($cache->isConnected()) {
-    echo "Redis is responsive\n";
-}
-
-// Get detailed Redis statistics
-$stats = $cache->getStatistics();
-echo "Hit Ratio: {$stats['hit_ratio']}%\n";
-echo "Redis Version: " . $stats['redis_stats']['redis_version'] . "\n";
-echo "Connected Clients: " . $stats['redis_stats']['connected_clients'] . "\n";
-
-// Get connection info
-$info = $cache->getConnectionInfo();
-echo "Redis Server: {$info['redis_version']}\n";
-echo "Used Memory: {$info['used_memory_human']}\n";
-```
-
-**3. Advanced Configuration**
-
-```php
-// Production Redis setup with authentication
-$cache = new RedisCacheAdapter(
-    RedisCacheAdapter::createConnection(
-        host: 'redis.example.com',
-        port: 6379,
-        timeout: 2.0,          // 2 second timeout
-        auth: 'secure_password',
-        database: 1            // Use database 1
-    ),
-    'prod:cache:'             // Namespace for production
-);
-
-// Development setup
-$cache = new RedisCacheAdapter(
-    RedisCacheAdapter::createConnection(),
-    'dev:cache:'
-);
-```
-
-**4. Error Handling & Resilience**
-
-The Redis adapter includes comprehensive error handling:
-
-```php
-try {
-    $cache = new RedisCacheAdapter(
-        RedisCacheAdapter::createConnection('unreachable-host')
-    );
-} catch (CacheException $e) {
-    // Fallback to file cache
-    $cache = new FileSystemAdapter();
-    error_log("Redis unavailable, using file cache: " . $e->getMessage());
-}
-
-// Operations fail gracefully
-$item = $cache->getItem('some_key');
-// Always returns a CacheItem, even if Redis is down
-if ($item->isHit()) {
-    return $item->get();
-} else {
-    // Generate fresh data
-    return expensiveOperation();
-}
-```
-
-**5. Pattern-Based Operations**
-
-```php
-// Clear all user sessions
-$cache->clearByPrefix('session:user:');
-
-// Clear all cache (use with caution in production)
-$cache->clear();
-
-// Selective cleanup by pattern
-$cache->clearByPrefix('temp:');      // Clear temporary data
-$cache->clearByPrefix('api:v1:');    // Clear old API cache
-```
-
-#### Redis vs Other Adapters Comparison
-
-| Feature               | Array             | FileSystem        | Redis                                 |
-|-----------------------|-------------------|-------------------|---------------------------------------|
-| **Persistence**       | ❌ Memory only    | ✅ File-based    | ✅ In-memory + optional persistence  |
-| **Multi-process**     | ❌ Single process | ✅ Shared files  | ✅ Distributed                       |
-| **Performance**       | ⚡ Fastest        | 🔶 Medium        | ⚡ Very fast                         |
-| **Scalability**       | ❌ Limited        | 🔶 Single server | ✅ Distributed/Clustered             |
-| **Concurrency**       | ❌ No protection  | ✅ Lock-based    | ✅ Atomic operations                 |
-| **Memory Usage**      | 🔴 High           | 🟢 Low           | 🔶 Medium                            |
-| **Setup Complexity**  | 🟢 None           | 🟢 None          | 🔶 Redis server required             |
-
-#### Best Practices
-
-```php
-// Use appropriate TTL based on data type
-$userProfile = new CacheItem('user_profile_123');
-$userProfile->set($userData);
-$userProfile->expiresAfter(3600);    // 1 hour for user data
-
-$apiResponse = new CacheItem('api_weather_london');
-$apiResponse->set($weatherData);
-$apiResponse->expiresAfter(300);     // 5 minutes for weather
-
-// Use prefixes for organization
-$userCache = new RedisCacheAdapter($redis, 'users:');
-$apiCache = new RedisCacheAdapter($redis, 'api:');
-$sessionCache = new RedisCacheAdapter($redis, 'sessions:');
-
-// Monitor performance
-$stats = $cache->getStatistics();
-if ($stats['hit_ratio'] < 80) {
-    error_log("Cache hit ratio is low: {$stats['hit_ratio']}%");
-}
-```
+For more details on cache stores and advanced features, see the [MonkeysLegion Cache](https://github.com/monkeyscloud/monkeyslegion-cache) package documentation.
 
 ## Configuration
 
@@ -620,7 +555,7 @@ use MonkeysLegion\Database\DSN\SQLiteDsnBuilder;
 $dsn = MySQLDsnBuilder::localhost('myapp')->build();
 $dsn = MySQLDsnBuilder::docker('myapp', 'db')->build();
 
-// PostgreSQL  
+// PostgreSQL
 $dsn = PostgreSQLDsnBuilder::localhost('myapp')->build();
 $dsn = PostgreSQLDsnBuilder::create()
     ->host('localhost')
