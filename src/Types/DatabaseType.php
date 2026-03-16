@@ -43,7 +43,7 @@ enum DatabaseType: string
     {
         return match ($this) {
             self::MYSQL => self::MYSQL->value,
-            self::POSTGRESQL => self::POSTGRESQL->value,
+            self::POSTGRESQL => 'pgsql',
             self::SQLITE => self::SQLITE->value,
         };
     }
