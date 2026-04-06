@@ -66,6 +66,18 @@ interface ConnectionInterface
      */
     public function getName(): string;
 
+    // ── Observability ───────────────────────────────────────────
+
+    /**
+     * Total number of queries executed on this connection.
+     */
+    public int $queryCount { get; }
+
+    /**
+     * Seconds elapsed since the connection was established (0.0 if disconnected).
+     */
+    public float $uptimeSeconds { get; }
+
     // ── Transaction Support ─────────────────────────────────────
 
     /**
