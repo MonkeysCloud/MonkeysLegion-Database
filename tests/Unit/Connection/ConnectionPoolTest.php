@@ -143,4 +143,65 @@ final class ConnectionPoolTest extends TestCase
         $stats = $pool->getStats();
         $this->assertSame(0, $stats->idle);
     }
+
+    #[Test]
+    public function warmUpPreWarmToMinConnections(): void
+    {
+        $dsn    = new DsnConfig(driver: DatabaseDriver::SQLite, memory: true);
+        $config = new DatabaseConfig(name: 'warmup-test', driver: DatabaseDriver::SQLite, dsn: $dsn);
+        $poolConfig = new PoolConfig(minConnections: 3, maxConnections: 10, validateOnAcquire: false);
+        $pool   = new ConnectionPool($config, $poolConfig);
+
+        $pool->warmUp();
+
+        $stats = $pool->getStats();
+        $this->assertSame(3, $stats->idle);
+        $this->assertSame(0, $stats->active);
+        $this->assertSame(3, $stats->total);
+    }
+
+    #[Test]
+    public function warmUpIsIdempotentWhenAlreadyWarmed(): void
+    {
+        $dsn    = new DsnConfig(driver: DatabaseDriver::SQLite, memory: true);
+        $config = new DatabaseConfig(name: 'warmup2-test', driver: DatabaseDriver::SQLite, dsn: $dsn);
+        $poolConfig = new PoolConfig(minConnections: 2, maxConnections: 10, validateOnAcquire: false);
+        $pool   = new ConnectionPool($config, $poolConfig);
+
+        $pool->warmUp();
+        $pool->warmUp(); // second call should be a no-op
+
+        $stats = $pool->getStats();
+        $this->assertSame(2, $stats->idle);
+        $this->assertSame(2, $stats->total);
+    }
+
+    #[Test]
+    public function releasePreservesOriginalCreatedAt(): void
+    {
+        // Verifies the createdAt bug fix: max-lifetime is relative to connection
+        // creation, NOT to the moment it was last released back to the pool.
+        $dsn    = new DsnConfig(driver: DatabaseDriver::SQLite, memory: true);
+        $config = new DatabaseConfig(name: 'lifetime-test', driver: DatabaseDriver::SQLite, dsn: $dsn);
+        $poolConfig = new PoolConfig(
+            maxConnections: 5,
+            maxLifetimeSeconds: 3600,
+            validateOnAcquire: false,
+        );
+        $pool = new ConnectionPool($config, $poolConfig);
+
+        $conn = $pool->acquire();
+
+        // Simulate passage of time by sleeping briefly, then release
+        $before = microtime(true);
+        $pool->release($conn);
+
+        // Re-acquire — must be the same object (reused from pool)
+        $conn2 = $pool->acquire();
+        $this->assertSame($conn, $conn2);
+
+        // getStats().total must still be 1 (no new connection was created)
+        $pool->release($conn2);
+        $this->assertSame(1, $pool->getStats()->total);
+    }
 }

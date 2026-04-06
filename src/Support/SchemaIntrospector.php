@@ -150,51 +150,49 @@ final class SchemaIntrospector
 
     /**
      * Check if a table exists (case-insensitive, underscore-tolerant).
+     *
+     * PHP 8.4 — uses `array_any()` to replace both imperative foreach loops.
      */
     public static function tableExists(ConnectionInterface $conn, string $table): bool
     {
         $tables = self::listTables($conn);
         $needle = strtolower($table);
 
-        foreach ($tables as $t) {
-            if (strtolower($t) === $needle) {
-                return true;
-            }
+        // Exact case-insensitive match
+        if (array_any($tables, static fn(string $t): bool => strtolower($t) === $needle)) {
+            return true;
         }
 
-        // Try without underscores
+        // Underscore-folded match (e.g. "order_items" matches "orderitems")
         $needleCompact = str_replace('_', '', $needle);
-        foreach ($tables as $t) {
-            if (str_replace('_', '', strtolower($t)) === $needleCompact) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            $tables,
+            static fn(string $t): bool => str_replace('_', '', strtolower($t)) === $needleCompact,
+        );
     }
 
     /**
      * Resolve the actual table name (handles case/underscore differences).
+     *
+     * PHP 8.4 — uses `array_find()` to replace both imperative foreach loops.
      */
     public static function resolveTableName(ConnectionInterface $conn, string $name): ?string
     {
         $tables = self::listTables($conn);
         $needle = strtolower($name);
 
-        foreach ($tables as $t) {
-            if (strtolower($t) === $needle) {
-                return $t;
-            }
+        // Exact case-insensitive match
+        $found = array_find($tables, static fn(string $t): bool => strtolower($t) === $needle);
+        if ($found !== null) {
+            return $found;
         }
 
+        // Underscore-folded match
         $needleCompact = str_replace('_', '', $needle);
-        foreach ($tables as $t) {
-            if (str_replace('_', '', strtolower($t)) === $needleCompact) {
-                return $t;
-            }
-        }
-
-        return null;
+        return array_find(
+            $tables,
+            static fn(string $t): bool => str_replace('_', '', strtolower($t)) === $needleCompact,
+        );
     }
 
     // ── Column Discovery ────────────────────────────────────────

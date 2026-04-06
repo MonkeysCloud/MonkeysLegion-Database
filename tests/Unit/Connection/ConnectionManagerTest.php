@@ -229,4 +229,54 @@ final class ConnectionManagerTest extends TestCase
         // No assertion needed — just verifying no exceptions
         $this->assertTrue(true);
     }
+
+    // ── PHP 8.4 set-hook propagation ────────────────────────────
+
+    #[Test]
+    public function loggerSetHookPropagatesImmediatelyToOpenConnections(): void
+    {
+        $mgr  = $this->makeManager();
+        $conn = $mgr->connection();
+        $conn->pdo(); // force the lazy connection to resolve into a real Connection
+
+        $logger = new class implements \Psr\Log\LoggerInterface {
+            use \Psr\Log\LoggerTrait;
+            public array $records = [];
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = $message;
+            }
+        };
+
+        // Assign via property — the set hook must propagate to the open Connection
+        $mgr->logger = $logger;
+
+        // Execute a query so the logger gets a record
+        $conn->query('SELECT 1');
+
+        $this->assertNotEmpty($logger->records);
+    }
+
+    #[Test]
+    public function loggerAssignedBeforeConnectionOpenIsPickedUpByFactory(): void
+    {
+        $mgr = $this->makeManager();
+
+        $logger = new class implements \Psr\Log\LoggerInterface {
+            use \Psr\Log\LoggerTrait;
+            public array $records = [];
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = $message;
+            }
+        };
+
+        // Assign before any connection is opened
+        $mgr->logger = $logger;
+
+        // Now open connection — factory closure must inject the logger
+        $mgr->connection()->query('SELECT 1');
+
+        $this->assertNotEmpty($logger->records);
+    }
 }

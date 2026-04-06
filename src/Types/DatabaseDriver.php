@@ -88,16 +88,23 @@ enum DatabaseDriver: string
     /**
      * Resolve a driver from any recognized alias string.
      *
+     * PHP 8.4 — uses `array_find()` to replace the imperative foreach.
+     *
      * @throws \InvalidArgumentException If the type is not recognized
      */
     public static function fromString(string $type): self
     {
         $normalized = strtolower(trim($type));
 
-        foreach (self::cases() as $case) {
-            if ($normalized === $case->value || in_array($normalized, $case->aliases(), true)) {
-                return $case;
-            }
+        // PHP 8.4 array_find() — returns the first matching case or null.
+        $found = array_find(
+            self::cases(),
+            static fn(self $case): bool =>
+                $normalized === $case->value || in_array($normalized, $case->aliases(), true),
+        );
+
+        if ($found !== null) {
+            return $found;
         }
 
         throw new \InvalidArgumentException("Unsupported database driver: {$type}");

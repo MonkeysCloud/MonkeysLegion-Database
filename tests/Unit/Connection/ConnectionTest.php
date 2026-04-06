@@ -376,6 +376,59 @@ final class ConnectionTest extends TestCase
         $this->assertSame(5000, (int) $timeout['timeout']);
     }
 
+    // ── lastInsertId ────────────────────────────────────────────
+
+    #[Test]
+    public function lastInsertIdReturnsIdAfterInsert(): void
+    {
+        $conn = $this->makeSqliteConnection();
+        $conn->connect();
+
+        $conn->execute('CREATE TABLE test_lid (id INTEGER PRIMARY KEY AUTOINCREMENT, val TEXT)');
+        $conn->execute('INSERT INTO test_lid (val) VALUES (:v)', [':v' => 'hello']);
+
+        $id = $conn->lastInsertId();
+        $this->assertNotFalse($id);
+        $this->assertSame('1', $id);
+    }
+
+    #[Test]
+    public function lastInsertIdIncrementsOnMultipleInserts(): void
+    {
+        $conn = $this->makeSqliteConnection();
+        $conn->connect();
+
+        $conn->execute('CREATE TABLE test_lid2 (id INTEGER PRIMARY KEY AUTOINCREMENT, val TEXT)');
+        $conn->execute('INSERT INTO test_lid2 (val) VALUES (:v)', [':v' => 'a']);
+        $conn->execute('INSERT INTO test_lid2 (val) VALUES (:v)', [':v' => 'b']);
+
+        $id = $conn->lastInsertId();
+        $this->assertSame('2', $id);
+    }
+
+    // ── Public logger/dispatcher properties ─────────────────────
+
+    #[Test]
+    public function loggerAndDispatcherAssignableAsProperties(): void
+    {
+        $conn = $this->makeSqliteConnection();
+
+        // Assign via direct property write (no setter method needed)
+        $conn->logger = new class implements \Psr\Log\LoggerInterface {
+            use \Psr\Log\LoggerTrait;
+            public array $records = [];
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => $message];
+            }
+        };
+
+        $conn->connect();
+        $conn->query('SELECT 1');
+
+        $this->assertNotEmpty($conn->logger->records);
+    }
+
     // ── Config access ───────────────────────────────────────────
 
     #[Test]

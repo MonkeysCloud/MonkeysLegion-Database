@@ -37,6 +37,14 @@ interface ConnectionPoolInterface
     public function drain(): void;
 
     /**
+     * Pre-warm the pool up to the configured minimum connection count.
+     *
+     * Calling this during application boot avoids the cold-start latency of
+     * creating connections on the first real request.
+     */
+    public function warmUp(): void;
+
+    /**
      * Get current pool statistics.
      */
     public function getStats(): ConnectionPoolStats;

@@ -127,4 +127,16 @@ final class LazyConnectionTest extends TestCase
         $this->assertTrue($lazy->initialized);
         $this->assertInstanceOf(\PDO::class, $pdo);
     }
+
+    #[Test]
+    public function lastInsertIdProxiesToInnerConnection(): void
+    {
+        $lazy = $this->makeLazyConnection();
+
+        $lazy->execute('CREATE TABLE lazy_lid (id INTEGER PRIMARY KEY AUTOINCREMENT, val TEXT)');
+        $lazy->execute('INSERT INTO lazy_lid (val) VALUES (:v)', [':v' => 'test']);
+
+        $id = $lazy->lastInsertId();
+        $this->assertSame('1', $id);
+    }
 }
