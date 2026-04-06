@@ -132,6 +132,26 @@ final class LazyConnection implements ConnectionInterface
     }
 
     /**
+     * Proxy for Connection::$queryCount.
+     * Returns 0 if the connection has not been initialized.
+     */
+    public int $queryCount {
+        get => $this->inner instanceof Connection
+            ? $this->inner->queryCount
+            : 0;
+    }
+
+    /**
+     * Proxy for Connection::$uptimeSeconds.
+     * Returns 0.0 if the connection has not been initialized.
+     */
+    public float $uptimeSeconds {
+        get => $this->inner instanceof Connection
+            ? $this->inner->uptimeSeconds
+            : 0.0;
+    }
+
+    /**
      * Resolve the underlying connection, creating it on first call.
      */
     private function resolve(): ConnectionInterface

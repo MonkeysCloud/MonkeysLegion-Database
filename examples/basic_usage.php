@@ -3,199 +3,202 @@
 declare(strict_types=1);
 
 /**
- * Example: Basic Database Operations with Cache
- * 
- * This example demonstrates how to use the integrated cache system
- * with database operations for improved performance.
+ * MonkeysLegion Database v2 — Basic Usage
+ *
+ * Demonstrates:
+ * - Creating connections via ConnectionManager
+ * - Basic CRUD operations
+ * - Transaction handling
+ * - Lazy connections
+ * - Property hooks (queryCount, uptimeSeconds)
+ * - Typed exception handling
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-if (!function_exists('env')) {
-    function env($key, $default = null)
-    {
-        $value = getenv($key);
-        return $value !== false ? $value : $default;
-    }
+use MonkeysLegion\Database\Connection\ConnectionManager;
+use MonkeysLegion\Database\Exceptions\DuplicateKeyException;
+use MonkeysLegion\Database\Exceptions\QueryException;
+
+// ── 1. ConnectionManager from Array ──────────────────────────────────
+
+$manager = ConnectionManager::fromArray([
+    'default' => [
+        'driver'   => 'sqlite',
+        'memory'   => true,
+    ],
+]);
+
+echo "=== MonkeysLegion Database v2 — Basic Usage ===\n\n";
+
+// ── 2. Lazy Connection ──────────────────────────────────────────────
+
+$conn = $manager->connection();
+
+echo "1. Lazy Connection\n";
+echo "   Driver:    {$conn->getDriver()->label()}\n";
+echo "   Name:      {$conn->getName()}\n";
+echo "   Connected: " . ($conn->isConnected() ? 'yes' : 'no (lazy — not yet)') . "\n\n";
+
+// ── 3. Schema Setup ─────────────────────────────────────────────────
+
+$conn->execute('
+    CREATE TABLE users (
+        id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        name  TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        tier  TEXT NOT NULL DEFAULT "free"
+    )
+');
+
+$conn->execute('
+    CREATE TABLE posts (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title   TEXT NOT NULL,
+        body    TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+');
+
+echo "2. Schema Created\n";
+echo "   Connected: " . ($conn->isConnected() ? 'yes (first query triggered connection)' : 'no') . "\n";
+echo "   Queries:   {$conn->queryCount}\n\n";
+
+// ── 4. Insert — Basic Execute ───────────────────────────────────────
+
+echo "3. Insert Users\n";
+
+$conn->execute(
+    'INSERT INTO users (name, email, tier) VALUES (:name, :email, :tier)',
+    [':name' => 'Alice', ':email' => 'alice@example.com', ':tier' => 'premium'],
+);
+
+$conn->execute(
+    'INSERT INTO users (name, email, tier) VALUES (:name, :email, :tier)',
+    [':name' => 'Bob', ':email' => 'bob@example.com', ':tier' => 'free'],
+);
+
+$conn->execute(
+    'INSERT INTO users (name, email, tier) VALUES (:name, :email, :tier)',
+    [':name' => 'Carol', ':email' => 'carol@example.com', ':tier' => 'premium'],
+);
+
+echo "   3 users inserted. Query count: {$conn->queryCount}\n\n";
+
+// ── 5. Query — SELECT ───────────────────────────────────────────────
+
+echo "4. Query Users\n";
+
+$stmt = $conn->query('SELECT id, name, email, tier FROM users ORDER BY name');
+
+while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+    printf("   [%d] %-8s %-25s %s\n", $row['id'], $row['name'], $row['email'], $row['tier']);
 }
+echo "\n";
 
-if (!function_exists('storage_path')) {
-    function storage_path($path = '')
-    {
-        return __DIR__ . '/../var/' . $path;
-    }
+// ── 6. Query with Parameters ────────────────────────────────────────
+
+echo "5. Query Premium Users\n";
+
+$stmt = $conn->query(
+    'SELECT name, email FROM users WHERE tier = :tier',
+    [':tier' => 'premium'],
+);
+
+$premiumUsers = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+echo "   Found " . count($premiumUsers) . " premium users\n";
+foreach ($premiumUsers as $u) {
+    echo "   - {$u['name']} ({$u['email']})\n";
 }
+echo "\n";
 
+// ── 7. Transaction — Callback Style (Recommended) ──────────────────
 
-use MonkeysLegion\Database\Factory\ConnectionFactory;
-use MonkeysLegion\Cache\CacheManager;
-use MonkeysLegion\Database\Cache\CacheManagerBridge;
+echo "6. Transaction — Callback (auto commit/rollback)\n";
 
-// Load configurations
-$dbConfig = require __DIR__ . '/../config/database.php';
-$cacheConfig = require __DIR__ . '/../config/database_cache.php';
+$result = $conn->transaction(function ($c) {
+    $c->execute(
+        'INSERT INTO posts (user_id, title, body) VALUES (:uid, :title, :body)',
+        [':uid' => 1, ':title' => 'Hello World', ':body' => 'First post!'],
+    );
+    $c->execute(
+        'INSERT INTO posts (user_id, title, body) VALUES (:uid, :title, :body)',
+        [':uid' => 1, ':title' => 'Second Post', ':body' => 'More content'],
+    );
+    return 2; // return value from transaction
+});
 
-// Create database connection
-$connection = ConnectionFactory::create($dbConfig);
-$pdo = $connection->pdo();
+echo "   Inserted {$result} posts inside a transaction\n\n";
 
-// Create cache instance
-// Since CacheFactory is removed, we instantiate CacheManager directly and wrap it in the bridge
-// We assume CacheManager accepts the configuration array
-$cacheManager = new CacheManager($cacheConfig);
-$cache = new CacheManagerBridge($cacheManager, $cacheConfig['prefix'] ?? '');
+// ── 8. Transaction — Rollback on Error ──────────────────────────────
 
-// Example 1: Simple query caching
-function getUserById(int $userId, PDO $pdo, $cache): ?array
-{
-    $cacheKey = "user:{$userId}";
+echo "7. Transaction — Rollback on Error\n";
 
-    return $cache->remember($cacheKey, 3600, function () use ($userId, $pdo) {
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
-        $stmt->execute([$userId]);
-        return $stmt->fetch() ?: null;
-    });
-}
-
-// Example 2: List query caching
-function getActiveUsers(PDO $pdo, $cache): array
-{
-    return $cache->remember('users:active', 1800, function () use ($pdo) {
-        $stmt = $pdo->query('SELECT * FROM users WHERE active = 1 ORDER BY name');
-        return $stmt->fetchAll();
-    });
-}
-
-// Example 3: Paginated results caching
-function getUsersPaginated(int $page, int $perPage, PDO $pdo, $cache): array
-{
-    $cacheKey = "users:page:{$page}:{$perPage}";
-
-    return $cache->remember($cacheKey, 600, function () use ($page, $perPage, $pdo) {
-        $offset = ($page - 1) * $perPage;
-        $stmt = $pdo->prepare('SELECT * FROM users LIMIT ? OFFSET ?');
-        $stmt->execute([$perPage, $offset]);
-        return $stmt->fetchAll();
-    });
-}
-
-// Example 4: Complex query with joins
-function getUserWithPosts(int $userId, PDO $pdo, $cache): array
-{
-    $cacheKey = "user:{$userId}:with_posts";
-
-    return $cache->remember($cacheKey, 900, function () use ($userId, $pdo) {
-        // Get user
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
-        $stmt->execute([$userId]);
-        $user = $stmt->fetch();
-
-        if (!$user) {
-            return [];
-        }
-
-        // Get user's posts
-        $stmt = $pdo->prepare('SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC');
-        $stmt->execute([$userId]);
-        $user['posts'] = $stmt->fetchAll();
-
-        return $user;
-    });
-}
-
-// Example 5: Update with cache invalidation
-function updateUser(int $userId, array $data, PDO $pdo, $cache): bool
-{
-    // Build update query
-    $fields = [];
-    $values = [];
-    foreach ($data as $field => $value) {
-        $fields[] = "{$field} = ?";
-        $values[] = $value;
-    }
-    $values[] = $userId;
-
-    $query = 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?';
-    $stmt = $pdo->prepare($query);
-    $result = $stmt->execute($values);
-
-    if ($result) {
-        // Invalidate all related cache entries
-        $cache->delete("user:{$userId}");
-        $cache->delete("user:{$userId}:with_posts");
-        $cache->delete('users:active');
-
-        // Or use tags if available
-        if (method_exists($cache, 'tags')) {
-            $cache->tags(['users', "user:{$userId}"])->clear();
-        }
-    }
-
-    return $result;
-}
-
-// Example 6: Count queries with cache
-function getTotalUsers(PDO $pdo, $cache): int
-{
-    return $cache->remember('users:count', 3600, function () use ($pdo) {
-        $stmt = $pdo->query('SELECT COUNT(*) FROM users');
-        return (int) $stmt->fetchColumn();
-    });
-}
-
-// Example 7: Search with cache
-function searchUsers(string $query, PDO $pdo, $cache): array
-{
-    $cacheKey = 'users:search:' . md5($query);
-
-    return $cache->remember($cacheKey, 300, function () use ($query, $pdo) {
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE name LIKE ? OR email LIKE ?');
-        $searchTerm = "%{$query}%";
-        $stmt->execute([$searchTerm, $searchTerm]);
-        return $stmt->fetchAll();
-    });
-}
-
-// Example 8: Aggregate queries
-function getUserStatistics(PDO $pdo, $cache): array
-{
-    return $cache->remember('users:statistics', 7200, function () use ($pdo) {
-        return [
-            'total' => $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn(),
-            'active' => $pdo->query('SELECT COUNT(*) FROM users WHERE active = 1')->fetchColumn(),
-            'premium' => $pdo->query('SELECT COUNT(*) FROM users WHERE premium = 1')->fetchColumn(),
-            'total_posts' => $pdo->query('SELECT COUNT(*) FROM posts')->fetchColumn(),
-        ];
-    });
-}
-
-// Usage examples
 try {
-    // Fetch user (will be cached)
-    $user = getUserById(1, $pdo, $cache);
-    echo "User: " . ($user['name'] ?? 'Not found') . "\n";
-
-    // Fetch active users (will be cached)
-    $activeUsers = getActiveUsers($pdo, $cache);
-    echo "Active users: " . count($activeUsers) . "\n";
-
-    // Update user (will invalidate cache)
-    updateUser(1, ['name' => 'Updated Name'], $pdo, $cache);
-    echo "User updated and cache invalidated\n";
-
-    // Fetch user again (will query database and re-cache)
-    $user = getUserById(1, $pdo, $cache);
-    echo "User after update: " . ($user['name'] ?? 'Not found') . "\n";
-
-    // Get statistics
-    $stats = getUserStatistics($pdo, $cache);
-    echo "Statistics: " . json_encode($stats) . "\n";
-
-    // Check cache statistics
-    if (method_exists($cache, 'getStatistics')) {
-        $cacheStats = $cache->getStatistics();
-        echo "Cache stats: " . json_encode($cacheStats) . "\n";
-    }
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
+    $conn->transaction(function ($c) {
+        $c->execute(
+            'INSERT INTO posts (user_id, title) VALUES (:uid, :title)',
+            [':uid' => 2, ':title' => 'Will be rolled back'],
+        );
+        // This will fail — duplicate email
+        $c->execute(
+            'INSERT INTO users (name, email) VALUES (:name, :email)',
+            [':name' => 'Alice Dupe', ':email' => 'alice@example.com'],
+        );
+    });
+} catch (DuplicateKeyException $e) {
+    echo "   Caught DuplicateKeyException: rolled back automatically\n";
+    echo "   Constraint: {$e->constraintName}\n";
+    echo "   Debug SQL:  {$e->debugSql}\n";
+} catch (QueryException $e) {
+    echo "   Caught QueryException: {$e->getMessage()}\n";
+    echo "   SQL State: {$e->sqlState}\n";
 }
+
+// Verify the post was NOT persisted
+$stmt = $conn->query('SELECT COUNT(*) as cnt FROM posts WHERE user_id = 2');
+$count = (int) $stmt->fetch(\PDO::FETCH_ASSOC)['cnt'];
+echo "   Posts by user 2: {$count} (should be 0 — rolled back)\n\n";
+
+// ── 9. Update & Delete ──────────────────────────────────────────────
+
+echo "8. Update & Delete\n";
+
+$affected = $conn->execute(
+    'UPDATE users SET tier = :tier WHERE name = :name',
+    [':tier' => 'enterprise', ':name' => 'Alice'],
+);
+echo "   Updated {$affected} row(s)\n";
+
+$affected = $conn->execute(
+    'DELETE FROM users WHERE name = :name',
+    [':name' => 'Bob'],
+);
+echo "   Deleted {$affected} row(s)\n\n";
+
+// ── 10. Connection Stats ────────────────────────────────────────────
+
+echo "9. Connection Stats\n";
+echo "   Total queries:  {$conn->queryCount}\n";
+echo "   Uptime:         " . round($conn->uptimeSeconds, 4) . "s\n";
+echo "   Alive:          " . ($conn->isAlive() ? 'yes' : 'no') . "\n\n";
+
+// ── 11. Pool Stats ──────────────────────────────────────────────────
+
+echo "10. Pool Stats\n";
+$stats = $manager->stats();
+foreach ($stats as $name => $poolStats) {
+    echo "   [{$name}] active={$poolStats->active}, idle={$poolStats->idle}, "
+        . "utilization=" . round($poolStats->utilization() * 100) . "%\n";
+}
+echo "\n";
+
+// ── 12. Disconnect ──────────────────────────────────────────────────
+
+echo "11. Disconnect\n";
+$manager->disconnectAll();
+echo "   All connections disconnected.\n";
+echo "   Connected: " . ($conn->isConnected() ? 'yes' : 'no') . "\n\n";
+
+echo "=== Done ===\n";
