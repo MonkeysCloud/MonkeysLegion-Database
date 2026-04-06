@@ -13,6 +13,8 @@ use MonkeysLegion\Database\Types\DatabaseDriver;
 use MonkeysLegion\Database\Types\IsolationLevel;
 use PDO;
 use PDOStatement;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * MonkeysLegion Framework — Database Package
