@@ -142,7 +142,7 @@ final class ConnectionPool implements ConnectionPoolInterface
 
         while ($current < $target) {
             $connection = $this->createConnection();
-            $createdAt  = $this->connectionCreatedAt[spl_object_id($connection)];
+            $createdAt  = $this->connectionCreatedAt[spl_object_id($connection)] ?? microtime(true);
 
             $this->idle->enqueue([
                 'connection' => $connection,

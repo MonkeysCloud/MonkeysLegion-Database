@@ -377,13 +377,13 @@ final class Connection implements ConnectionInterface
 
     /**
      * Validate a timezone string before interpolating into SQL.
-     * Allows letters, digits, forward slash, dash, underscore, plus, colon, and dot.
+     * Allows letters, digits, forward slash, space, dash, underscore, plus, colon, and dot.
      *
      * @throws ConfigurationException On invalid timezone value.
      */
     private static function validateTimezone(string $timezone): string
     {
-        if (!preg_match('/^[A-Za-z0-9\/\-\_\+\:\. ]+$/', $timezone)) {
+        if (!preg_match('/^[A-Za-z0-9\/ _+:.-]+$/', $timezone)) {
             throw new ConfigurationException(
                 "Invalid timezone value '{$timezone}': contains disallowed characters.",
             );

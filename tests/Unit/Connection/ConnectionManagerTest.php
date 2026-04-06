@@ -237,7 +237,8 @@ final class ConnectionManagerTest extends TestCase
     {
         $mgr  = $this->makeManager();
         $conn = $mgr->connection();
-        $conn->pdo(); // force the lazy connection to resolve into a real Connection
+        // Calling pdo() forces the lazy wrapper to resolve into a real Connection
+        $conn->pdo();
 
         $logger = new class implements \Psr\Log\LoggerInterface {
             use \Psr\Log\LoggerTrait;
