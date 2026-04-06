@@ -122,6 +122,11 @@ final class LazyConnection implements ConnectionInterface
         return $this->resolve()->query($sql, $params);
     }
 
+    public function lastInsertId(?string $name = null): string|false
+    {
+        return $this->resolve()->lastInsertId($name);
+    }
+
     // ── Internal ────────────────────────────────────────────────
 
     /**

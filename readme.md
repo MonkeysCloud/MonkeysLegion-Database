@@ -208,6 +208,18 @@ foreach ($stats as $name => $poolStats) {
 }
 ```
 
+### Pool Warm-Up
+
+Pre-warm the pool to `minConnections` at application boot to avoid cold-start latency:
+
+```php
+use MonkeysLegion\Database\Connection\ConnectionPool;
+use MonkeysLegion\Database\Config\{DatabaseConfig, DsnConfig, PoolConfig};
+
+$pool = new ConnectionPool($config, new PoolConfig(minConnections: 3, maxConnections: 20));
+$pool->warmUp(); // opens 3 connections eagerly
+```
+
 ## Exception Handling
 
 Every `PDOException` is automatically classified into a specific, actionable exception type:
@@ -275,26 +287,25 @@ Discover table structure without manual SQL:
 ```php
 use MonkeysLegion\Database\Support\SchemaIntrospector;
 
-$pdo = $conn->pdo();
-$driver = $conn->getDriver();
-
 // Get all tables
-$tables = SchemaIntrospector::tables($pdo, $driver);
+$tables = SchemaIntrospector::listTables($conn);
 // ['users', 'orders', 'products', ...]
 
+// Check table existence (case-insensitive, underscore-tolerant)
+$exists = SchemaIntrospector::tableExists($conn, 'users'); // true
+
+// Resolve actual table name (handles case/underscore differences)
+$name = SchemaIntrospector::resolveTableName($conn, 'orderItems'); // 'order_items'
+
 // Get columns for a table
-$columns = SchemaIntrospector::columns($pdo, $driver, 'users');
-// [['column_name' => 'id', 'data_type' => 'int', 'is_nullable' => 'NO', ...], ...]
+$columns = SchemaIntrospector::listColumns($conn, 'users');
+// ['id', 'email', 'name', ...]
 
-// Get primary key
-$pk = SchemaIntrospector::primaryKey($pdo, $driver, 'users');
-// 'id'
-
-// Get foreign keys
-$fks = SchemaIntrospector::foreignKeys($pdo, $driver, 'orders');
-// [['column' => 'user_id', 'referenced_table' => 'users', 'referenced_column' => 'id'], ...]
+// Check if a specific column exists
+$has = SchemaIntrospector::columnExists($conn, 'users', 'email'); // true
 
 // Results are statically cached — repeated calls are free
+SchemaIntrospector::clearCache(); // flush after migrations
 ```
 
 ## Configuration Reference
@@ -353,7 +364,76 @@ $config = DatabaseConfig::fromArray('primary', [
 | SQLite     | `file`      | Database file path                |
 | SQLite     | `memory`    | Use `:memory:` database           |
 
-## Health Checks
+## Last Insert ID
+
+```php
+$conn->execute('INSERT INTO users (name) VALUES (:n)', [':n' => 'Alice']);
+$id = $conn->lastInsertId();   // '1'
+
+// PostgreSQL — pass the sequence name
+$pgId = $conn->lastInsertId('users_id_seq');
+```
+
+## Retry Handler
+
+Automatic retry on transient failures (deadlocks, lost connections) with
+truncated exponential back-off and jitter:
+
+```php
+use MonkeysLegion\Database\Support\RetryHandler;
+use MonkeysLegion\Database\Support\RetryConfig;
+
+$result = RetryHandler::withRetry(
+    operation: function () use ($conn): int {
+        return $conn->execute(
+            'UPDATE inventory SET stock = stock - 1 WHERE id = :id',
+            [':id' => 42],
+        );
+    },
+    config: new RetryConfig(
+        maxAttempts: 4,
+        baseDelayMs: 20,
+        multiplier:  2.0,
+        maxDelayMs:  500,
+        jitter:      true,
+    ),
+);
+```
+
+`RetryConfig` is a PHP 8.4 `readonly` class. Its `$effectiveMaxDelay` property
+uses a `get` hook to guarantee the value is never negative.
+
+## PSR-3 Logging
+
+Inject a PSR-3 logger directly as a property — no setter method needed:
+
+```php
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+
+$log = new Logger('db');
+$log->pushHandler(new StreamHandler('php://stderr'));
+
+// On ConnectionManager — set hook propagates to all open connections
+$manager->logger = $log;
+
+// On a single Connection directly
+$conn->logger = $log;
+```
+
+Logged events: connection established, connection closed, query executed
+(with SQL + duration), query errors.
+
+## Event Dispatcher
+
+```php
+use MonkeysLegion\Database\Contracts\ConnectionEventDispatcherInterface;
+
+$manager->eventDispatcher = $myDispatcher; // propagates to all open connections
+$conn->eventDispatcher    = $myDispatcher; // or on a single connection
+```
+
+
 
 ```php
 use MonkeysLegion\Database\Support\HealthChecker;
@@ -362,8 +442,8 @@ $result = HealthChecker::check($conn);
 
 echo "Healthy: " . ($result->healthy ? 'yes' : 'no') . "\n";
 echo "Latency: {$result->latencyMs}ms\n";
-if ($result->error) {
-    echo "Error: {$result->error}\n";
+if ($result->reason) {
+    echo "Reason: {$result->reason}\n";
 }
 ```
 

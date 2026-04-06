@@ -144,4 +144,13 @@ interface ConnectionInterface
      * @throws \MonkeysLegion\Database\Exceptions\QueryException
      */
     public function query(string $sql, array $params = []): PDOStatement;
+
+    /**
+     * Return the ID of the last inserted row or sequence value.
+     *
+     * @param string|null $name Name of the sequence object (required for PostgreSQL).
+     *
+     * @return string|false The ID string, or false if not supported / no insert occurred.
+     */
+    public function lastInsertId(?string $name = null): string|false;
 }
