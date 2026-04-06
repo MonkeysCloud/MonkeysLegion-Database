@@ -34,14 +34,14 @@ final class RetryHandlerTest extends TestCase
     public function effectiveMaxDelayHookReturnsClamped(): void
     {
         $cfg = new RetryConfig(maxDelayMs: 500);
-        $this->assertSame(500, $cfg->effectiveMaxDelay);
+        $this->assertSame(500, $cfg->effectiveMaxDelay());
     }
 
     #[Test]
     public function effectiveMaxDelayIsNeverNegative(): void
     {
         $cfg = new RetryConfig(maxDelayMs: -100);
-        $this->assertSame(0, $cfg->effectiveMaxDelay);
+        $this->assertSame(0, $cfg->effectiveMaxDelay());
     }
 
     #[Test]

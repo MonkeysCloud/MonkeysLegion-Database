@@ -28,8 +28,7 @@ use SplQueue;
 final class ConnectionPool implements ConnectionPoolInterface
 {
     /** @var SplQueue<array{connection: ConnectionInterface, createdAt: float, lastUsedAt: float}> */
-    // PHP 8.4 — `new` in property initialiser replaces constructor assignment.
-    private SplQueue $idle = new SplQueue();
+    private SplQueue $idle;
 
     private int $activeCount = 0;
     private int $createdTotal = 0;
@@ -46,7 +45,9 @@ final class ConnectionPool implements ConnectionPoolInterface
     public function __construct(
         private readonly DatabaseConfig $config,
         private readonly PoolConfig $poolConfig,
-    ) {}
+    ) {
+        $this->idle = new SplQueue();
+    }
 
     // ── Pool Operations ─────────────────────────────────────────
 

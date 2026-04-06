@@ -157,6 +157,15 @@ final class LazyConnection implements ConnectionInterface
     }
 
     /**
+     * Return the inner connection if already resolved, null otherwise.
+     * Used by ConnectionManager to propagate collaborators (logger, dispatcher).
+     */
+    public function innerConnection(): ?ConnectionInterface
+    {
+        return $this->inner;
+    }
+
+    /**
      * Resolve the underlying connection, creating it on first call.
      */
     private function resolve(): ConnectionInterface
