@@ -86,10 +86,12 @@ final readonly class DatabaseConfig
             );
         }
 
-        // Build DSN config from flat array or explicit 'dsn' key
-        $dsnConfig = isset($config['dsn']) && $config['dsn'] instanceof DsnConfig
-            ? $config['dsn']
-            : DsnConfig::fromArray($driver, $config);
+        // Build DSN config from explicit object, nested array, or flat top-level keys
+        $dsnConfig = match (true) {
+            isset($config['dsn']) && $config['dsn'] instanceof DsnConfig => $config['dsn'],
+            isset($config['dsn']) && is_array($config['dsn'])           => DsnConfig::fromArray($driver, $config['dsn']),
+            default                                                      => DsnConfig::fromArray($driver, $config),
+        };
 
         // Pool config
         $poolConfig = isset($config['pool']) && is_array($config['pool'])
