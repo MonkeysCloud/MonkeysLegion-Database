@@ -18,11 +18,6 @@ use MonkeysLegion\Database\Exceptions\DeadlockException;
  * Retries use truncated exponential back-off with jitter to spread load and
  * reduce the chance of thundering-herd behaviour on a busy database.
  *
- * PHP 8.4 features used:
- *  • `readonly` class (`RetryConfig`) — all properties immutable after construction
- *  • `get` property hook on `RetryConfig::$maxDelayMs` for a clamped computed view
- *  • `array_any()` to test whether an exception type is in the retryable list
- *
  * @copyright 2026 MonkeysCloud Team
  * @license   MIT
  */

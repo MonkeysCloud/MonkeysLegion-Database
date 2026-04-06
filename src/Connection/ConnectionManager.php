@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace MonkeysLegion\Database\Connection;
 
 use MonkeysLegion\Database\Config\DatabaseConfig;
-use MonkeysLegion\Database\Config\DsnConfig;
 use MonkeysLegion\Database\Contracts\ConnectionEventDispatcherInterface;
 use MonkeysLegion\Database\Contracts\ConnectionInterface;
 use MonkeysLegion\Database\Contracts\ConnectionManagerInterface;
@@ -331,22 +330,28 @@ final class ConnectionManager implements ConnectionManagerInterface
     }
 
     /**
+     * Select the replica with the lowest observed load.
+     *
+     * Uses `queryCount` as a proxy for load — uninitialized lazy connections
+     * have 0 queries (cheapest to use), and among initialized replicas the
+     * one with the fewest executed queries is preferred.
+     *
      * @param list<ConnectionInterface> $replicas
      */
     private function leastConnections(array $replicas): ConnectionInterface
     {
-        // Prefer uninitialized lazy connections (they have 0 load)
-        $uninitialized = array_filter(
-            $replicas,
-            static fn(ConnectionInterface $c) => $c instanceof LazyConnection && !$c->initialized,
-        );
+        $best     = $replicas[0];
+        $bestLoad = PHP_INT_MAX;
 
-        if (!empty($uninitialized)) {
-            return $uninitialized[array_rand($uninitialized)];
+        foreach ($replicas as $replica) {
+            $load = $replica->queryCount;
+            if ($load < $bestLoad) {
+                $bestLoad = $load;
+                $best     = $replica;
+            }
         }
 
-        // All initialized — fall back to random
-        return $replicas[array_rand($replicas)];
+        return $best;
     }
 
     /**

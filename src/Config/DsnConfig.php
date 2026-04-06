@@ -63,7 +63,32 @@ final readonly class DsnConfig
             memory: (bool) ($config['memory'] ?? false),
             charset: isset($config['charset']) ? (string) $config['charset'] : null,
             sslMode: isset($config['sslmode']) ? (string) $config['sslmode'] : null,
+            extra: self::normalizeExtra($config['extra'] ?? []),
         );
+    }
+
+    /**
+     * Normalize an 'extra' config value into a string→string map.
+     *
+     * @return array<string, string>
+     */
+    private static function normalizeExtra(mixed $extra): array
+    {
+        if (!is_array($extra)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($extra as $key => $value) {
+            if (!is_string($key) && !is_int($key)) {
+                continue;
+            }
+            if (!is_scalar($value) && $value !== null) {
+                continue;
+            }
+            $normalized[(string) $key] = (string) ($value ?? '');
+        }
+        return $normalized;
     }
 
     // ── Private DSN Builders ────────────────────────────────────

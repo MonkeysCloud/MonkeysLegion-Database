@@ -42,10 +42,11 @@ final class ErrorClassifier
         $sqlState        = $e->errorInfo[0] ?? ($e->getCode() ?: null);
         $driverErrorCode = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : null;
         $message         = $e->getMessage();
+        $messageLower    = strtolower($message);
 
         // ── Connection Errors ───────────────────────────────────
 
-        if (self::isAuthError($driver, $sqlState, $driverErrorCode, $message)) {
+        if (self::isAuthError($driver, $sqlState, $driverErrorCode, $messageLower)) {
             return new AuthenticationException(
                 message: "Authentication failed: {$message}",
                 previous: $e,
@@ -53,7 +54,7 @@ final class ErrorClassifier
             );
         }
 
-        if (self::isConnectionLost($driver, $sqlState, $driverErrorCode, $message)) {
+        if (self::isConnectionLost($driver, $sqlState, $driverErrorCode, $messageLower)) {
             return new ConnectionLostException(
                 message: "Connection lost: {$message}",
                 previous: $e,
@@ -61,7 +62,7 @@ final class ErrorClassifier
             );
         }
 
-        if (self::isConnectionFailed($driver, $sqlState, $driverErrorCode, $message)) {
+        if (self::isConnectionFailed($driver, $sqlState, $driverErrorCode, $messageLower)) {
             return new ConnectionFailedException(
                 message: "Connection failed: {$message}",
                 previous: $e,

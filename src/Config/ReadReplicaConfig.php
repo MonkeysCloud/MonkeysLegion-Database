@@ -51,7 +51,11 @@ final readonly class ReadReplicaConfig
             strategy: isset($config['strategy'])
                 ? ReadReplicaStrategy::from($config['strategy'])
                 : ReadReplicaStrategy::RoundRobin,
-            stickyAfterWrite: (bool) ($config['sticky_after_write'] ?? true),
+            stickyAfterWrite: (bool) (
+                array_key_exists('sticky', $config)
+                    ? $config['sticky']
+                    : ($config['sticky_after_write'] ?? true)
+            ),
         );
     }
 }

@@ -9,7 +9,7 @@ use MonkeysLegion\Database\Contracts\ConnectionInterface;
 use MonkeysLegion\Database\Contracts\ConnectionPoolInterface;
 use MonkeysLegion\Database\Exceptions\PoolException;
 use MonkeysLegion\Database\Support\ConnectionPoolStats;
-use MonkeysLegion\Database\Support\HealthChecker;
+
 use SplQueue;
 
 /**
@@ -17,10 +17,6 @@ use SplQueue;
  *
  * In-memory connection pool with health monitoring, idle eviction,
  * and max-lifetime enforcement.
- *
- * PHP 8.4 features used:
- *  • `new` in property initialiser for `SplQueue` (no constructor needed)
- *  • `array_any()` for concise idle-queue checks
  *
  * @copyright 2026 MonkeysCloud Team
  * @license   MIT

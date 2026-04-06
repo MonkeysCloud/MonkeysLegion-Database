@@ -24,8 +24,6 @@ final class SchemaIntrospector
 {
     // ── Static Caches ───────────────────────────────────────────
 
-    /** @var array<string, string> pdoId → driver name */
-    private static array $driverCache = [];
 
     /** @var array<string, string> pdoId → schema/database name */
     private static array $schemaCache = [];
@@ -50,7 +48,6 @@ final class SchemaIntrospector
      */
     public static function clearCache(): void
     {
-        self::$driverCache = [];
         self::$schemaCache = [];
         self::$tablesCache = [];
         self::$columnsCache = [];
@@ -257,7 +254,10 @@ final class SchemaIntrospector
         string $column,
         ?string $schema = null,
     ): bool {
-        $key = ($schema ?: '_') . '.' . $table . '.' . $column;
+        $pdo = $conn->pdo();
+        $driver = $conn->getDriver();
+        $effectiveSchema = $schema ?: self::detectSchema($conn);
+        $key = $driver->value . ':' . spl_object_id($pdo) . ':' . $effectiveSchema . '.' . $table . '.' . $column;
 
         if (array_key_exists($key, self::$columnExistsCache)) {
             return self::$columnExistsCache[$key];
