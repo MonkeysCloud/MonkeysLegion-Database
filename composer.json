@@ -1,6 +1,6 @@
 {
   "name": "monkeyscloud/monkeyslegion-database",
-  "description": "Native PDO-powered MySQL 8.4 connection and query helpers.",
+  "description": "High-performance PDO connection management with read/write splitting, connection pooling, and multi-driver support (MySQL, PostgreSQL, SQLite).",
   "type": "library",
   "license": "MIT",
   "minimum-stability": "dev",
@@ -13,20 +13,29 @@
   ],
   "require": {
     "php": "^8.4",
-    "ext-pdo_mysql": "*",
-    "monkeyscloud/monkeyslegion-cache": "^1.0"
+    "ext-pdo": "*",
+    "psr/simple-cache": "^3.0",
+    "psr/log": "^3.0"
+  },
+  "suggest": {
+    "ext-pdo_mysql": "Required for MySQL/MariaDB connections",
+    "ext-pdo_pgsql": "Required for PostgreSQL connections",
+    "ext-pdo_sqlite": "Required for SQLite connections",
+    "monkeyscloud/monkeyslegion-cache": "For advanced caching features (CacheManagerBridge)"
   },
   "autoload": {
     "psr-4": {
       "MonkeysLegion\\Database\\": "src/"
-    },
-    "files": [
-      "src/Support/Helpers.php"
-    ]
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MonkeysLegion\\Database\\Tests\\": "tests/"
+    }
   },
   "extra": {
     "branch-alias": {
-      "dev-main": "1.0.x-dev"
+      "dev-main": "2.0.x-dev"
     }
   },
   "require-dev": {
@@ -36,7 +45,7 @@
   "scripts": {
     "test": "phpunit",
     "test-coverage": "phpunit --coverage-html coverage",
-    "phpstan": "phpstan analyse src",
+    "phpstan": "phpstan analyse src --level=9",
     "quality": [
       "@phpstan",
       "@test"

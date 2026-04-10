@@ -3,419 +3,374 @@
 declare(strict_types=1);
 
 /**
- * Example: Advanced Cache Features
- * 
- * This example demonstrates advanced cache features including:
- * - Cache tagging
- * - Atomic operations
- * - Rate limiting
- * - Multiple cache stores
- * - Cache warming
+ * MonkeysLegion Database v2 — Advanced Usage
+ *
+ * Demonstrates:
+ * - Read/write splitting with replicas
+ * - Connection pooling and stats
+ * - Schema introspection
+ * - Health checks
+ * - Error classification with the full exception hierarchy
+ * - Multiple named connections
+ * - Sticky-after-write behavior
+ * - Direct Connection creation with DsnConfig + DatabaseConfig
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-if (!function_exists('env')) {
-    function env($key, $default = null)
-    {
-        $value = getenv($key);
-        return $value !== false ? $value : $default;
-    }
+use MonkeysLegion\Database\Config\DatabaseConfig;
+use MonkeysLegion\Database\Config\DsnConfig;
+use MonkeysLegion\Database\Connection\Connection;
+use MonkeysLegion\Database\Connection\ConnectionManager;
+use MonkeysLegion\Database\Connection\LazyConnection;
+use MonkeysLegion\Database\Exceptions\ConfigurationException;
+use MonkeysLegion\Database\Exceptions\DuplicateKeyException;
+use MonkeysLegion\Database\Exceptions\ForeignKeyViolationException;
+use MonkeysLegion\Database\Exceptions\QueryException;
+use MonkeysLegion\Database\Exceptions\SyntaxException;
+use MonkeysLegion\Database\Exceptions\TableNotFoundException;
+use MonkeysLegion\Database\Exceptions\TransactionException;
+use MonkeysLegion\Database\Support\HealthChecker;
+use MonkeysLegion\Database\Support\SchemaIntrospector;
+use MonkeysLegion\Database\Types\DatabaseDriver;
+use MonkeysLegion\Database\Types\IsolationLevel;
+
+echo "=== MonkeysLegion Database v2 — Advanced Usage ===\n\n";
+
+// ── 1. Direct Connection via Config Objects ─────────────────────────
+
+echo "1. Direct Connection (Config Objects)\n";
+
+$dsn = new DsnConfig(
+    driver: DatabaseDriver::SQLite,
+    memory: true,
+);
+
+$config = new DatabaseConfig(
+    name: 'manual',
+    driver: DatabaseDriver::SQLite,
+    dsn: $dsn,
+);
+
+$conn = new Connection($config);
+$conn->connect();
+
+echo "   DSN:       {$dsn->dsn()}\n";
+echo "   Driver:    {$conn->getDriver()->label()}\n";
+echo "   Extension: {$conn->getDriver()->requiredExtension()}\n";
+echo "   Loaded:    " . ($conn->getDriver()->isExtensionLoaded() ? 'yes' : 'no') . "\n\n";
+
+$conn->disconnect();
+
+// ── 2. Multi-Connection Manager ─────────────────────────────────────
+
+echo "2. Multi-Connection Manager\n";
+
+$manager = ConnectionManager::fromArray([
+    'app' => [
+        'driver' => 'sqlite',
+        'memory' => true,
+    ],
+    'analytics' => [
+        'driver' => 'sqlite',
+        'memory' => true,
+    ],
+]);
+
+$app = $manager->connection('app');
+$analytics = $manager->connection('analytics');
+
+echo "   Default: {$manager->getDefaultConnectionName()}\n";
+echo "   App:     {$app->getName()} ({$app->getDriver()->label()})\n";
+echo "   Analyt:  {$analytics->getName()} ({$analytics->getDriver()->label()})\n\n";
+
+// ── 3. Schema Introspection ─────────────────────────────────────────
+
+echo "3. Schema Introspection\n";
+
+$appConn = $manager->connection('app');
+
+// Create some tables
+$appConn->execute('
+    CREATE TABLE users (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        email      TEXT NOT NULL UNIQUE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+');
+$appConn->execute('
+    CREATE TABLE orders (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        total   REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+');
+
+// SchemaIntrospector uses ConnectionInterface — no need for raw PDO
+$tables = SchemaIntrospector::listTables($appConn);
+echo "   Tables: " . implode(', ', $tables) . "\n";
+
+$columns = SchemaIntrospector::listColumns($appConn, 'users');
+echo "   users columns: " . implode(', ', $columns) . "\n";
+
+echo "   column 'email' exists: " . (SchemaIntrospector::columnExists($appConn, 'users', 'email') ? 'yes' : 'no') . "\n";
+echo "   column 'phone' exists: " . (SchemaIntrospector::columnExists($appConn, 'users', 'phone') ? 'yes' : 'no') . "\n";
+
+$fks = SchemaIntrospector::loadForeignKeys($appConn, 'orders');
+echo "   orders foreign keys:\n";
+foreach ($fks as $col => $fk) {
+    echo "     {$col} → {$fk['ref_table']}.{$fk['ref_col']} ({$fk['constraint_name']})\n";
 }
 
-if (!function_exists('storage_path')) {
-    function storage_path($path = '')
-    {
-        return __DIR__ . '/../var/' . $path;
-    }
+$uniques = SchemaIntrospector::loadUniqueIndexes($appConn, 'users');
+echo "   users unique indexes:\n";
+foreach ($uniques as $idx) {
+    $type = $idx['is_primary'] ? 'PRIMARY' : 'UNIQUE';
+    echo "     {$idx['name']} ({$type}): " . implode(', ', $idx['columns']) . "\n";
 }
+echo "\n";
 
+// ── 4. Health Checks ────────────────────────────────────────────────
 
-use MonkeysLegion\Database\Factory\ConnectionFactory;
-use MonkeysLegion\Cache\CacheManager;
-use MonkeysLegion\Database\Cache\CacheManagerBridge;
+echo "4. Health Checks\n";
 
-// Load configurations
-$dbConfig = require __DIR__ . '/../config/database.php';
-$cacheConfig = require __DIR__ . '/../config/database_cache.php';
+$result = HealthChecker::check($appConn);
+echo "   Healthy:  " . ($result->healthy ? 'yes' : 'no') . "\n";
+echo "   Latency:  " . round($result->latencyMs, 2) . "ms\n";
+if ($result->reason) {
+    echo "   Reason:   {$result->reason}\n";
+}
+echo "\n";
 
-$connection = ConnectionFactory::create($dbConfig);
-$pdo = $connection->pdo();
+// ── 5. Connection Pooling ───────────────────────────────────────────
 
-// Create cache instance
-$cacheManager = new CacheManager($cacheConfig);
-$cache = new CacheManagerBridge($cacheManager, $cacheConfig['prefix'] ?? '');
+echo "5. Connection Pooling & Stats\n";
 
-/**
- * Example 1: Cache Tagging for Related Data
- */
-function getUserWithTagging(int $userId, PDO $pdo, $cache): array
-{
-    $bridge = $cache; // CacheManagerBridge instance
+$stats = $manager->stats();
+foreach ($stats as $name => $poolStats) {
+    echo "   [{$name}]\n";
+    echo "     Active:      {$poolStats->active}\n";
+    echo "     Idle:        {$poolStats->idle}\n";
+    echo "     Total:       {$poolStats->total}\n";
+    echo "     Max:         {$poolStats->maxSize}\n";
+    echo "     Utilization: " . round($poolStats->utilization() * 100) . "%\n";
+    echo "     Exhausted:   " . ($poolStats->isExhausted() ? 'YES' : 'no') . "\n";
 
-    // Use tags to group related cache entries
-    return $bridge->tags(['users', "user:{$userId}"])->remember(
-        "user:{$userId}:full",
-        3600,
-        function () use ($userId, $pdo) {
-            $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
-            $stmt->execute([$userId]);
-            $user = $stmt->fetch();
+    // toArray() for JSON/monitoring
+    $arr = $poolStats->toArray();
+    echo "     JSON:        " . json_encode($arr) . "\n";
+}
+echo "\n";
 
-            if (!$user) {
-                return [];
-            }
+// ── 6. Transaction with Isolation Level ─────────────────────────────
 
-            // Get related data
-            $stmt = $pdo->prepare('SELECT * FROM posts WHERE user_id = ?');
-            $stmt->execute([$userId]);
-            $user['posts'] = $stmt->fetchAll();
+echo "6. Transactions with Isolation Level\n";
 
-            $stmt = $pdo->prepare('SELECT * FROM comments WHERE user_id = ?');
-            $stmt->execute([$userId]);
-            $user['comments'] = $stmt->fetchAll();
+$appConn->execute(
+    'INSERT INTO users (name, email) VALUES (:name, :email)',
+    [':name' => 'Alice', ':email' => 'alice@example.com'],
+);
 
-            return $user;
-        }
+// Callback-based transaction (recommended)
+$orderId = $appConn->transaction(function ($c) {
+    $c->execute(
+        'INSERT INTO orders (user_id, total) VALUES (:uid, :total)',
+        [':uid' => 1, ':total' => 149.99],
     );
-}
+    return (int) $c->pdo()->lastInsertId();
+});
 
-/**
- * Example 2: Invalidate All User-Related Cache
- */
-function invalidateUserCache(int $userId, $cache): void
-{
-    // Clear all cache entries tagged with this user
-    if (method_exists($cache, 'tags')) {
-        $cache->tags(["user:{$userId}"])->clear();
-    }
+echo "   Created order #{$orderId} inside transaction\n";
 
-    // Also clear general user lists
-    $cache->tags(['users'])->clear();
-}
-
-/**
- * Example 3: Rate Limiting with Atomic Operations
- */
-function checkRateLimit(string $userId, int $maxRequests, int $windowSeconds, $cache): bool
-{
-    $key = "rate_limit:{$userId}";
-
-    // Increment request count
-    $requests = $cache->increment($key);
-
-    // If this is the first request, set expiration
-    if ($requests === 1 || $requests === false) {
-        $cache->set($key, 1, $windowSeconds);
-        return true;
-    }
-
-    // Check if limit exceeded
-    return $requests <= $maxRequests;
-}
-
-/**
- * Example 4: View Counter with Atomic Increment
- */
-function incrementPostViews(int $postId, $cache): int
-{
-    $key = "post:{$postId}:views";
-    return $cache->increment($key) ?: 1;
-}
-
-function getPostViews(int $postId, $cache): int
-{
-    $key = "post:{$postId}:views";
-    return (int) $cache->get($key, 0);
-}
-
-/**
- * Example 5: Cache Lock Pattern for Expensive Operations
- */
-function performExpensiveOperation(string $operationId, $cache, callable $operation): mixed
-{
-    $lockKey = "lock:operation:{$operationId}";
-    $resultKey = "result:operation:{$operationId}";
-
-    // Try to acquire lock
-    if (!$cache->add($lockKey, true, 300)) {
-        // Lock exists, check if result is available
-        $retries = 0;
-        while ($retries < 30) {
-            if ($cache->has($resultKey)) {
-                return $cache->get($resultKey);
-            }
-            sleep(1);
-            $retries++;
-        }
-        throw new Exception('Operation timeout');
-    }
-
-    try {
-        // Perform operation
-        $result = $operation();
-
-        // Store result
-        $cache->set($resultKey, $result, 3600);
-
-        return $result;
-    } finally {
-        // Release lock
-        $cache->delete($lockKey);
-    }
-}
-
-/**
- * Example 6: Multi-Store Cache Strategy
- */
-class MultiStoreCacheStrategy
-{
-    private $hotCache;  // Fast cache (Redis/Memcached)
-    private $coldCache; // Persistent cache (File)
-
-    public function __construct($config)
-    {
-        // Hot cache for frequently accessed data
-        $redisConfig = [
-            'default' => 'redis',
-            'stores' => [
-                'redis' => [
-                    'driver' => 'redis',
-                    'host' => $config['redis']['host'],
-                    'port' => $config['redis']['port'],
-                    'prefix' => 'hot:',
-                ]
-            ]
-        ];
-        $this->hotCache = new CacheManagerBridge(new CacheManager($redisConfig), 'hot:');
-
-        // Cold cache for less frequently accessed data
-        $fileConfig = [
-            'default' => 'file',
-            'stores' => [
-                'file' => [
-                    'driver' => 'file',
-                    'path' => $config['file']['path'],
-                    'prefix' => 'cold:',
-                ]
-            ]
-        ];
-        $this->coldCache = new CacheManagerBridge(new CacheManager($fileConfig), 'cold:');
-    }
-
-    public function get(string $key, callable $callback, bool $isHot = false): mixed
-    {
-        $cache = $isHot ? $this->hotCache : $this->coldCache;
-        $ttl = $isHot ? 300 : 3600; // Hot data expires faster
-
-        return $cache->remember($key, $ttl, $callback);
-    }
-}
-
-/**
- * Example 7: Cache Warming on Application Start
- */
-function warmCache(PDO $pdo, $cache): void
-{
-    echo "Warming cache...\n";
-
-    // Warm frequently accessed data
-    $cache->remember('users:active', 3600, function () use ($pdo) {
-        $stmt = $pdo->query('SELECT * FROM users WHERE active = 1');
-        return $stmt->fetchAll();
-    });
-
-    $cache->remember('categories:all', 7200, function () use ($pdo) {
-        $stmt = $pdo->query('SELECT * FROM categories ORDER BY name');
-        return $stmt->fetchAll();
-    });
-
-    $cache->remember('settings:global', 86400, function () use ($pdo) {
-        $stmt = $pdo->query('SELECT * FROM settings');
-        $settings = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $settings[$row['key']] = $row['value'];
-        }
-        return $settings;
-    });
-
-    echo "Cache warmed successfully\n";
-}
-
-/**
- * Example 8: Cascade Cache Invalidation
- */
-function cascadeInvalidateCache(string $entity, int $entityId, $cache): void
-{
-    $invalidationMap = [
-        'user' => [
-            "user:{$entityId}",
-            "user:{$entityId}:full",
-            "user:{$entityId}:posts",
-            'users:active',
-            'users:list',
-        ],
-        'post' => [
-            "post:{$entityId}",
-            "post:{$entityId}:full",
-            "post:{$entityId}:comments",
-            'posts:recent',
-            'posts:popular',
-        ],
-        'comment' => [
-            "comment:{$entityId}",
-            'comments:recent',
-        ],
-    ];
-
-    if (isset($invalidationMap[$entity])) {
-        foreach ($invalidationMap[$entity] as $key) {
-            $cache->delete($key);
-        }
-    }
-
-    // Also clear tags
-    if (method_exists($cache, 'tags')) {
-        $cache->tags([$entity, "{$entity}:{$entityId}"])->clear();
-    }
-}
-
-/**
- * Example 9: Cache Statistics Monitoring
- */
-function monitorCacheHealth($cache): array
-{
-    $stats = $cache->getStatistics();
-
-    $health = [
-        'status' => 'healthy',
-        'issues' => [],
-    ];
-
-    // Check hit ratio
-    if (isset($stats['hit_ratio']) && $stats['hit_ratio'] < 70) {
-        $health['status'] = 'warning';
-        $health['issues'][] = "Low cache hit ratio: {$stats['hit_ratio']}%";
-    }
-
-    // Check connectivity
-    if (!$cache->isConnected()) {
-        $health['status'] = 'critical';
-        $health['issues'][] = 'Cache connection lost';
-    }
-
-    // Check memory usage (if available)
-    if (isset($stats['memory_usage_percent']) && $stats['memory_usage_percent'] > 90) {
-        $health['status'] = 'warning';
-        $health['issues'][] = "High memory usage: {$stats['memory_usage_percent']}%";
-    }
-
-    return $health;
-}
-
-/**
- * Example 10: Stale-While-Revalidate Pattern
- */
-function getWithStaleWhileRevalidate(
-    string $key,
-    int $freshTtl,
-    int $staleTtl,
-    callable $callback,
-    $cache
-): mixed {
-    $freshKey = "{$key}:fresh";
-    $staleKey = "{$key}:stale";
-
-    // Try to get fresh data
-    $fresh = $cache->get($freshKey);
-    if ($fresh !== null) {
-        return $fresh;
-    }
-
-    // Get stale data if available
-    $stale = $cache->get($staleKey);
-
-    // Try to acquire lock for regeneration
-    $lockKey = "{$key}:lock";
-    if ($cache->add($lockKey, true, 30)) {
-        try {
-            // Regenerate data
-            $data = $callback();
-
-            // Store fresh and stale copies
-            $cache->set($freshKey, $data, $freshTtl);
-            $cache->set($staleKey, $data, $staleTtl);
-
-            return $data;
-        } finally {
-            $cache->delete($lockKey);
-        }
-    }
-
-    // Another process is regenerating, return stale data if available
-    return $stale ?? $callback();
-}
-
-// Usage Examples
+// Manual transaction with isolation level
+$appConn->beginTransaction(IsolationLevel::Serializable);
 try {
-    echo "=== Advanced Cache Examples ===\n\n";
-
-    // Example 1: Cache with tagging
-    echo "1. Fetching user with tagging...\n";
-    $user = getUserWithTagging(1, $pdo, $cache);
-    echo "User fetched: " . ($user['name'] ?? 'Not found') . "\n\n";
-
-    // Example 2: Rate limiting
-    echo "2. Testing rate limiting...\n";
-    for ($i = 1; $i <= 5; $i++) {
-        $allowed = checkRateLimit('user_123', 3, 60, $cache);
-        echo "Request {$i}: " . ($allowed ? 'Allowed' : 'Rate limited') . "\n";
-    }
-    echo "\n";
-
-    // Example 3: View counter
-    echo "3. Incrementing post views...\n";
-    for ($i = 1; $i <= 3; $i++) {
-        $views = incrementPostViews(42, $cache);
-        echo "Post views: {$views}\n";
-    }
-    echo "\n";
-
-    // Example 4: Cache warming
-    echo "4. Warming cache...\n";
-    warmCache($pdo, $cache);
-    echo "\n";
-
-    // Example 5: Monitor cache health
-    echo "5. Checking cache health...\n";
-    $health = monitorCacheHealth($cache);
-    echo "Status: {$health['status']}\n";
-    if (!empty($health['issues'])) {
-        echo "Issues: " . implode(', ', $health['issues']) . "\n";
-    }
-    echo "\n";
-
-    // Example 6: Stale-while-revalidate
-    echo "6. Using stale-while-revalidate...\n";
-    $data = getWithStaleWhileRevalidate(
-        'expensive_operation',
-        300,  // Fresh for 5 minutes
-        3600, // Stale for 1 hour
-        function () {
-            echo "Executing expensive operation...\n";
-            sleep(2); // Simulate expensive operation
-            return ['result' => 'computed', 'timestamp' => time()];
-        },
-        $cache
+    $appConn->execute(
+        'UPDATE orders SET total = total + :amount WHERE id = :id',
+        [':amount' => 50.00, ':id' => $orderId],
     );
-    echo "Data: " . json_encode($data) . "\n\n";
-
-    // Example 7: Cache statistics
-    if (method_exists($cache, 'getStatistics')) {
-        echo "7. Cache statistics:\n";
-        $stats = $cache->getStatistics();
-        echo json_encode($stats, JSON_PRETTY_PRINT) . "\n";
-    }
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
+    $appConn->commit();
+    echo "   Updated order total (Serializable isolation)\n";
+} catch (\Throwable $e) {
+    $appConn->rollBack();
+    echo "   Transaction failed: {$e->getMessage()}\n";
 }
+echo "\n";
+
+// ── 7. Full Exception Hierarchy Demo ────────────────────────────────
+
+echo "7. Exception Hierarchy Demo\n";
+
+// 7a. DuplicateKeyException
+echo "   7a. DuplicateKeyException:\n";
+try {
+    $appConn->execute(
+        'INSERT INTO users (name, email) VALUES (:name, :email)',
+        [':name' => 'Alice Dupe', ':email' => 'alice@example.com'],
+    );
+} catch (DuplicateKeyException $e) {
+    echo "       Caught! Debug SQL: {$e->debugSql}\n";
+} catch (QueryException $e) {
+    echo "       Query error (SQLSTATE {$e->sqlState}): {$e->getMessage()}\n";
+}
+
+// 7b. QueryException for missing table
+echo "   7b. Missing table:\n";
+try {
+    $appConn->query('SELECT * FROM nonexistent_table');
+} catch (TableNotFoundException $e) {
+    echo "       TableNotFoundException! Table: {$e->tableName}\n";
+} catch (QueryException $e) {
+    echo "       QueryException: {$e->getMessage()}\n";
+}
+
+// 7c. SyntaxException
+echo "   7c. SyntaxException:\n";
+try {
+    $appConn->execute('INSRT INTO users (name) VALUES ("bad")');
+} catch (SyntaxException $e) {
+    echo "       Caught! Retryable: " . ($e->retryable ? 'yes' : 'NO') . "\n";
+} catch (QueryException $e) {
+    echo "       Query error: {$e->getMessage()}\n";
+}
+
+// 7d. TransactionException
+echo "   7d. TransactionException:\n";
+try {
+    $appConn->commit(); // No active transaction
+} catch (TransactionException $e) {
+    echo "       Caught! Operation: {$e->operation}, Nesting: {$e->nestingLevel}\n";
+}
+
+// 7e. ConfigurationException
+echo "   7e. ConfigurationException:\n";
+try {
+    $manager->connection('nonexistent');
+} catch (ConfigurationException $e) {
+    echo "       Caught! {$e->getMessage()}\n";
+}
+
+echo "\n";
+
+// ── 8. Lazy Connection Deep Dive ────────────────────────────────────
+
+echo "8. Lazy Connection Lifecycle\n";
+
+/** @var LazyConnection $lazy */
+$lazy = $manager->connection('analytics');
+
+echo "   Initialized: " . ($lazy->initialized ? 'yes' : 'no') . "\n";  // no
+echo "   Driver:      {$lazy->getDriver()->label()}\n";                // no connection yet
+echo "   Name:        {$lazy->getName()}\n";                           // no connection yet
+echo "   Initialized: " . ($lazy->initialized ? 'yes' : 'no') . "\n";  // still no
+
+$lazy->execute('CREATE TABLE events (id INTEGER PRIMARY KEY, type TEXT)');
+echo "   After query: " . ($lazy->initialized ? 'yes (initialized)' : 'no') . "\n";
+echo "   Connected:   " . ($lazy->isConnected() ? 'yes' : 'no') . "\n";
+echo "   queryCount:  {$lazy->queryCount}\n";
+
+$lazy->disconnect();
+echo "   After disconnect: " . ($lazy->initialized ? 'yes' : 'no (reset)') . "\n\n";
+
+// ── 9. PHP 8.4 Property Hooks ───────────────────────────────────────
+
+echo "9. PHP 8.4 Property Hooks\n";
+
+/** @var LazyConnection $hookConn */
+$hookConn = $manager->connection('app');
+echo "   queryCount before: {$hookConn->queryCount}\n"; // preserves count from earlier
+
+$hookConn->query('SELECT 1');
+$hookConn->query('SELECT 1');
+echo "   queryCount after:  {$hookConn->queryCount}\n";
+echo "   uptimeSeconds:     " . round($hookConn->uptimeSeconds, 4) . "s\n\n";
+
+// ── 10. Read/Write Splitting (Config Example) ───────────────────────
+
+echo "10. Read/Write Splitting (Config Example)\n";
+echo <<<'CONFIG'
+
+    $manager = ConnectionManager::fromArray([
+        'primary' => [
+            'driver'   => 'mysql',
+            'host'     => 'primary.db.internal',
+            'database' => 'myapp',
+            'username' => 'root',
+            'password' => 'secret',
+            'read' => [
+                'strategy' => 'round_robin',
+                'sticky'   => true,
+                'replicas' => [
+                    ['host' => 'replica-1.db.internal'],
+                    ['host' => 'replica-2.db.internal'],
+                ],
+            ],
+        ],
+    ]);
+
+    // Reads → replica, Writes → primary
+    $users = $manager->read()->query('SELECT * FROM users');
+    $manager->write()->execute('INSERT INTO users ...');
+
+    // After write, reads also go to primary (sticky)
+    $manager->markWritePerformed();
+    $fresh = $manager->read()->query('SELECT * FROM users WHERE ...');
+
+    // Reset at request boundary
+    $manager->resetSticky();
+
+CONFIG;
+
+echo "\n";
+
+// ── 11. DI Container Pattern ────────────────────────────────────────
+
+echo "11. DI Container Pattern\n";
+echo <<<'DI'
+
+    use MonkeysLegion\Database\Contracts\ConnectionManagerInterface;
+    use MonkeysLegion\Database\Connection\ConnectionManager;
+
+    // Container registration
+    $container->singleton(
+        ConnectionManagerInterface::class,
+        fn() => ConnectionManager::fromArray(
+            require base_path('config/database.php'),
+        ),
+    );
+
+    // Service usage
+    class UserRepository {
+        public function __construct(
+            private readonly ConnectionManagerInterface $db,
+        ) {}
+
+        public function find(int $id): ?array
+        {
+            $stmt = $this->db->read()->query(
+                'SELECT * FROM users WHERE id = :id',
+                [':id' => $id],
+            );
+            return $stmt->fetch() ?: null;
+        }
+
+        public function create(string $name, string $email): int
+        {
+            $this->db->write()->execute(
+                'INSERT INTO users (name, email) VALUES (:n, :e)',
+                [':n' => $name, ':e' => $email],
+            );
+            return (int) $this->db->write()->pdo()->lastInsertId();
+        }
+    }
+
+DI;
+
+echo "\n";
+
+// ── Cleanup ─────────────────────────────────────────────────────────
+
+$manager->disconnectAll();
+echo "=== Done ===\n";
