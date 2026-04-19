@@ -79,13 +79,6 @@ final readonly class DatabaseConfig
 
         $driver = DatabaseDriver::fromString((string) $config['driver']);
 
-        if (!$driver->isExtensionLoaded()) {
-            throw new ConfigurationException(
-                "PHP extension '{$driver->requiredExtension()}' is not loaded for driver '{$driver->label()}'",
-                driver: $driver,
-            );
-        }
-
         // Build DSN config from explicit object, nested array, or flat top-level keys
         $dsnConfig = match (true) {
             isset($config['dsn']) && $config['dsn'] instanceof DsnConfig => $config['dsn'],

@@ -77,6 +77,15 @@ final class Connection implements ConnectionInterface
             return;
         }
 
+        // Validate the required PHP extension is loaded before attempting to connect
+        $driver = $this->connectionConfig->driver;
+        if (!$driver->isExtensionLoaded()) {
+            throw new ConfigurationException(
+                "PHP extension '{$driver->requiredExtension()}' is not loaded for driver '{$driver->label()}'",
+                driver: $driver,
+            );
+        }
+
         try {
             $this->pdo = new PDO(
                 $this->connectionConfig->dsn->dsn(),
