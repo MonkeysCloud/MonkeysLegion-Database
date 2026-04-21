@@ -15,7 +15,8 @@
     "php": "^8.4",
     "ext-pdo": "*",
     "psr/simple-cache": "^3.0",
-    "psr/log": "^3.0"
+    "psr/log": "^3.0",
+    "monkeyscloud/monkeyslegion-cli": "^2.0"
   },
   "suggest": {
     "ext-pdo_mysql": "Required for MySQL/MariaDB connections",
