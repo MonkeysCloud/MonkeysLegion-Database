@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace MonkeysLegion\Database\Connection;
 
+use MonkeysLegion\Database\Contracts\ConnectionEventDispatcherInterface;
 use MonkeysLegion\Database\Contracts\ConnectionInterface;
 use MonkeysLegion\Database\Types\DatabaseDriver;
 use MonkeysLegion\Database\Types\IsolationLevel;
@@ -24,6 +25,28 @@ use PDOStatement;
 final class LazyConnection implements ConnectionInterface
 {
     private ?ConnectionInterface $inner = null;
+
+    /** @var ?ConnectionEventDispatcherInterface Stored until inner connection is resolved */
+    private ?ConnectionEventDispatcherInterface $pendingEventDispatcher = null;
+
+    /**
+     * Proxy for Connection::$eventDispatcher.
+     *
+     * Stores the dispatcher and propagates it to the inner Connection
+     * immediately if already resolved, or defers until first resolve().
+     */
+    public ?ConnectionEventDispatcherInterface $eventDispatcher {
+        get => $this->inner instanceof Connection
+            ? $this->inner->eventDispatcher
+            : $this->pendingEventDispatcher;
+        set(?ConnectionEventDispatcherInterface $value) {
+            $this->pendingEventDispatcher = $value;
+            // Propagate immediately if inner connection already exists
+            if ($this->inner instanceof Connection) {
+                $this->inner->eventDispatcher = $value;
+            }
+        }
+    }
 
     /**
      * @param \Closure(): ConnectionInterface $factory Creates the real connection on demand
@@ -167,9 +190,19 @@ final class LazyConnection implements ConnectionInterface
 
     /**
      * Resolve the underlying connection, creating it on first call.
+     * Propagates any pending collaborators (eventDispatcher) to the new connection.
      */
     private function resolve(): ConnectionInterface
     {
-        return $this->inner ??= ($this->factory)();
+        if ($this->inner === null) {
+            $this->inner = ($this->factory)();
+
+            // Propagate deferred event dispatcher
+            if ($this->pendingEventDispatcher !== null && $this->inner instanceof Connection) {
+                $this->inner->eventDispatcher = $this->pendingEventDispatcher;
+            }
+        }
+
+        return $this->inner;
     }
 }
