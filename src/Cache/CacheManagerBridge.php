@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace MonkeysLegion\Database\Cache;
 
-use MonkeysLegion\Cache\CacheManager as LegionCacheManager;
+use MonkeysLegion\Cache\CacheManager;
+use MonkeysLegion\Cache\CacheStore;
+use MonkeysLegion\Cache\CacheStoreInterface;
 use MonkeysLegion\Database\Cache\Contracts\CacheInterface;
 use MonkeysLegion\Database\Exceptions\CacheException;
 
@@ -17,14 +19,14 @@ use MonkeysLegion\Database\Exceptions\CacheException;
  */
 class CacheManagerBridge implements CacheInterface
 {
-    private LegionCacheManager $cacheManager;
+    private CacheManager $cacheManager;
     private string $prefix;
 
     /**
-     * @param LegionCacheManager $cacheManager The Legion cache manager instance
+     * @param CacheManager $cacheManager The Legion cache manager instance
      * @param string $prefix Optional prefix for all cache keys
      */
-    public function __construct(LegionCacheManager $cacheManager, string $prefix = '')
+    public function __construct(CacheManager $cacheManager, string $prefix = '')
     {
         $this->cacheManager = $cacheManager;
         $this->prefix = $prefix;
@@ -33,7 +35,7 @@ class CacheManagerBridge implements CacheInterface
     /**
      * Get cache manager instance for advanced operations
      */
-    public function getCacheManager(): LegionCacheManager
+    public function getCacheManager(): CacheManager
     {
         return $this->cacheManager;
     }
@@ -60,8 +62,7 @@ class CacheManagerBridge implements CacheInterface
     public function get(string $key, mixed $default = null): mixed
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->get($this->prefixKey($key), $default);
+            return $this->cacheManager->store()->get($this->prefixKey($key), $default);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to get cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -73,8 +74,7 @@ class CacheManagerBridge implements CacheInterface
     public function set(string $key, mixed $value, null|int|\DateInterval $ttl = null): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->set($this->prefixKey($key), $value, $ttl);
+            return $this->cacheManager->store()->set($this->prefixKey($key), $value, $ttl);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to set cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -86,8 +86,7 @@ class CacheManagerBridge implements CacheInterface
     public function delete(string $key): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->delete($this->prefixKey($key));
+            return $this->cacheManager->store()->delete($this->prefixKey($key));
         } catch (\Throwable $e) {
             throw new CacheException("Failed to delete cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -99,8 +98,7 @@ class CacheManagerBridge implements CacheInterface
     public function clear(): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->clear();
+            return $this->cacheManager->store()->clear();
         } catch (\Throwable $e) {
             throw new CacheException("Failed to clear cache: " . $e->getMessage(), 0, $e);
         }
@@ -118,8 +116,7 @@ class CacheManagerBridge implements CacheInterface
             foreach ($keys as $key) {
                 $prefixedKeys[] = $this->prefixKey($key);
             }
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->getMultiple($prefixedKeys, $default);
+            return $this->cacheManager->store()->getMultiple($prefixedKeys, $default);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to get multiple cache keys: " . $e->getMessage(), 0, $e);
         }
@@ -136,8 +133,7 @@ class CacheManagerBridge implements CacheInterface
             foreach ($values as $key => $value) {
                 $prefixedValues[$this->prefixKey($key)] = $value;
             }
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->setMultiple($prefixedValues, $ttl);
+            return $this->cacheManager->store()->setMultiple($prefixedValues, $ttl);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to set multiple cache keys: " . $e->getMessage(), 0, $e);
         }
@@ -154,8 +150,7 @@ class CacheManagerBridge implements CacheInterface
             foreach ($keys as $key) {
                 $prefixedKeys[] = $this->prefixKey($key);
             }
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->deleteMultiple($prefixedKeys);
+            return $this->cacheManager->store()->deleteMultiple($prefixedKeys);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to delete multiple cache keys: " . $e->getMessage(), 0, $e);
         }
@@ -167,8 +162,7 @@ class CacheManagerBridge implements CacheInterface
     public function has(string $key): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->has($this->prefixKey($key));
+            return $this->cacheManager->store()->has($this->prefixKey($key));
         } catch (\Throwable $e) {
             throw new CacheException("Failed to check cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -185,8 +179,8 @@ class CacheManagerBridge implements CacheInterface
     public function remember(string $key, int|\DateInterval|null $ttl, callable $callback): mixed
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->remember($this->prefixKey($key), $ttl, $callback);
+            $closure = \Closure::fromCallable($callback);
+            return $this->cacheManager->store()->remember($this->prefixKey($key), $ttl, $closure);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to remember cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -202,8 +196,7 @@ class CacheManagerBridge implements CacheInterface
     public function forever(string $key, mixed $value): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->forever($this->prefixKey($key), $value);
+            return $this->cacheManager->store()->forever($this->prefixKey($key), $value);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to store forever cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -219,8 +212,7 @@ class CacheManagerBridge implements CacheInterface
     public function increment(string $key, int $value = 1): int|bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->increment($this->prefixKey($key), $value);
+            return $this->cacheManager->store()->increment($this->prefixKey($key), $value);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to increment cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -236,8 +228,7 @@ class CacheManagerBridge implements CacheInterface
     public function decrement(string $key, int $value = 1): int|bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->decrement($this->prefixKey($key), $value);
+            return $this->cacheManager->store()->decrement($this->prefixKey($key), $value);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to decrement cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -253,8 +244,7 @@ class CacheManagerBridge implements CacheInterface
     public function pull(string $key, mixed $default = null): mixed
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->pull($this->prefixKey($key), $default);
+            return $this->cacheManager->store()->pull($this->prefixKey($key), $default);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to pull cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
@@ -271,29 +261,24 @@ class CacheManagerBridge implements CacheInterface
     public function add(string $key, mixed $value, int|\DateInterval|null $ttl = null): bool
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            return $this->cacheManager->add($this->prefixKey($key), $value, $ttl);
+            return $this->cacheManager->store()->add($this->prefixKey($key), $value, $ttl);
         } catch (\Throwable $e) {
             throw new CacheException("Failed to add cache key '{$key}': " . $e->getMessage(), 0, $e);
         }
     }
 
-    /**
-     * {@inheritdoc}
-     * @param array<string>|string $tags
-     * @phpstan-return \MonkeysLegion\Cache\CacheInterface
-     */
-    public function tags(array|string $tags): \MonkeysLegion\Cache\CacheInterface
+    public function tags(array|string $tags): CacheStoreInterface
     {
-        /** @phpstan-ignore-next-line - Method exists via __call magic method */
-        return $this->cacheManager->tags($tags);
+        $store = $this->cacheManager->store();
+        $store->tags($tags);
+        return $store;
     }
 
     /**
      * {@inheritdoc}
-     * @phpstan-return \MonkeysLegion\Cache\CacheInterface
+     * @phpstan-return CacheStore
      */
-    public function store(?string $name = null): \MonkeysLegion\Cache\CacheInterface
+    public function store(?string $name = null): CacheStore
     {
         return $this->cacheManager->store($name);
     }
@@ -309,18 +294,15 @@ class CacheManagerBridge implements CacheInterface
         try {
             // Use tagging feature if available, otherwise implement custom logic
             // For now, we'll use the underlying store's prefix clearing if available
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            $store = $this->cacheManager->getStore();
+            $store = $this->cacheManager->store();
 
             if (method_exists($store, 'clearByPrefix')) {
-                /** @phpstan-ignore-next-line - Dynamic method call on store object */
-                return $store->clearByPrefix($this->prefix . $prefix);
+                return $store->clearByPrefix("{$this->prefix}{$prefix}");
             }
 
             // Fallback: use tags if the store supports them
             if (method_exists($store, 'tags')) {
-                /** @phpstan-ignore-next-line - Method exists via __call magic method */
-                return $this->cacheManager->tags([$this->prefix . $prefix])->clear();
+                return $this->cacheManager->store()->tags(["{$this->prefix}{$prefix}"])->clear();
             }
 
             return false;
@@ -339,12 +321,9 @@ class CacheManagerBridge implements CacheInterface
         try {
             // Try a simple operation to verify connectivity
             $testKey = '__connection_test__';
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            $this->cacheManager->set($testKey, true, 1);
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            $result = $this->cacheManager->has($testKey);
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            $this->cacheManager->delete($testKey);
+            $this->cacheManager->store()->set($testKey, true, 1);
+            $result = $this->cacheManager->store()->has($testKey);
+            $this->cacheManager->store()->delete($testKey);
             return $result;
         } catch (\Throwable $e) {
             return false;
@@ -359,12 +338,10 @@ class CacheManagerBridge implements CacheInterface
     public function getStatistics(): array
     {
         try {
-            /** @phpstan-ignore-next-line - Method exists via __call magic method */
-            $store = $this->cacheManager->getStore();
+            $store = $this->cacheManager->store();
 
             // Try to get store-specific statistics
             if (method_exists($store, 'getStatistics')) {
-                /** @phpstan-ignore-next-line - Dynamic method call on store object */
                 return $store->getStatistics();
             }
 

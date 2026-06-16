@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MonkeysLegion\Database\Cache\Contracts;
 
 use MonkeysLegion\Cache\CacheManager;
+use MonkeysLegion\Cache\CacheStoreInterface;
 
 interface CacheInterface
 {
@@ -157,17 +158,17 @@ interface CacheInterface
      * Use cache tags for grouped operations
      * 
      * @param array<string>|string $tags Tag(s) to group cache entries
-     * @return \MonkeysLegion\Cache\CacheInterface Tagged cache manager instance
+     * @return CacheStoreInterface Tagged cache manager instance
      */
-    public function tags(array|string $tags): \MonkeysLegion\Cache\CacheInterface;
+    public function tags(array|string $tags): CacheStoreInterface;
 
     /**
      * Switch to a different cache store
      * 
      * @param string|null $name Store name
-     * @return \MonkeysLegion\Cache\CacheInterface Cache manager for the specified store
+     * @return CacheStoreInterface Cache manager for the specified store
      */
-    public function store(?string $name = null): \MonkeysLegion\Cache\CacheInterface;
+    public function store(?string $name = null): CacheStoreInterface;
 
     /**
      * Clear cache by prefix (useful for namespaced clearing)
