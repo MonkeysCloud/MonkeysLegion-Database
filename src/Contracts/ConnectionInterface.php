@@ -107,19 +107,27 @@ interface ConnectionInterface
     public function inTransaction(): bool;
 
     /**
+     * Current transaction nesting depth (0 = no transaction, 1 = top-level, 2+ = savepoint).
+     */
+    public function transactionDepth(): int;
+
+    /**
      * Execute a callback within a transaction.
      *
      * Commits on success, rolls back on any throwable.
+     * Supports nested transactions via savepoints.
+     * Retries on DeadlockException up to $attempts times with exponential backoff.
      *
      * @template T
      *
      * @param callable(self): T $callback
+     * @param int                $attempts  Maximum retry attempts on deadlock (default 1 = no retry).
      *
      * @return T
      *
      * @throws \Throwable Re-throws after rollback
      */
-    public function transaction(callable $callback, ?IsolationLevel $isolation = null): mixed;
+    public function transaction(callable $callback, ?IsolationLevel $isolation = null, int $attempts = 1): mixed;
 
     // ── Raw Execution ───────────────────────────────────────────
 

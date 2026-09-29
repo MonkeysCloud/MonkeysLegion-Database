@@ -256,16 +256,22 @@ final class ConnectionTest extends TestCase
     }
 
     #[Test]
-    public function beginTransactionThrowsWhenAlreadyActive(): void
+    public function beginTransactionCreatesSavepointWhenAlreadyActive(): void
     {
+        // Nested transactions use savepoints instead of throwing.
         $conn = $this->makeSqliteConnection();
         $conn->connect();
 
         $conn->beginTransaction();
+        $conn->beginTransaction(); // Creates SAVEPOINT sp2
 
-        $this->expectException(TransactionException::class);
-        $this->expectExceptionMessage('already');
-        $conn->beginTransaction();
+        $this->assertSame(2, $conn->transactionDepth());
+
+        $conn->rollBack(); // ROLLBACK TO SAVEPOINT sp2
+        $this->assertSame(1, $conn->transactionDepth());
+
+        $conn->rollBack(); // Full ROLLBACK
+        $this->assertSame(0, $conn->transactionDepth());
     }
 
     #[Test]

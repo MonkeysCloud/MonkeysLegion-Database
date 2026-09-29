@@ -128,9 +128,14 @@ final class LazyConnection implements ConnectionInterface
         return $this->inner !== null && $this->inner->inTransaction();
     }
 
-    public function transaction(callable $callback, ?IsolationLevel $isolation = null): mixed
+    public function transactionDepth(): int
     {
-        return $this->resolve()->transaction($callback, $isolation);
+        return $this->inner?->transactionDepth() ?? 0;
+    }
+
+    public function transaction(callable $callback, ?IsolationLevel $isolation = null, int $attempts = 1): mixed
+    {
+        return $this->resolve()->transaction($callback, $isolation, $attempts);
     }
 
     // ── Raw Execution ───────────────────────────────────────────

@@ -7,6 +7,7 @@ use MonkeysLegion\Database\Config\DatabaseConfig;
 use MonkeysLegion\Database\Contracts\ConnectionEventDispatcherInterface;
 use MonkeysLegion\Database\Contracts\ConnectionInterface;
 use MonkeysLegion\Database\Exceptions\ConfigurationException;
+use MonkeysLegion\Database\Exceptions\DeadlockException;
 use MonkeysLegion\Database\Exceptions\TransactionException;
 use MonkeysLegion\Database\Support\ErrorClassifier;
 use MonkeysLegion\Database\Types\DatabaseDriver;
@@ -36,6 +37,9 @@ final class Connection implements ConnectionInterface
     private ?PDO $pdo = null;
     private int $_queryCount = 0;
     private float $connectedAt = 0.0;
+
+    /** Transaction depth for savepoint-based nested transactions. */
+    private int $transactionDepth = 0;
 
     // ── PHP 8.4 — injectable collaborators as plain public properties ──────
     // Readable by anyone; writable by anyone (intended for DI / test helpers).
@@ -191,6 +195,13 @@ final class Connection implements ConnectionInterface
     {
         $pdo = $this->pdo();
 
+        if ($this->transactionDepth > 0) {
+            // Nested transaction — create a savepoint instead.
+            $this->transactionDepth++;
+            $pdo->exec('SAVEPOINT sp' . $this->transactionDepth);
+            return;
+        }
+
         if ($pdo->inTransaction()) {
             throw TransactionException::alreadyActive($this->connectionConfig->driver);
         }
@@ -200,50 +211,93 @@ final class Connection implements ConnectionInterface
         }
 
         $pdo->beginTransaction();
+        $this->transactionDepth = 1;
     }
 
     public function commit(): void
     {
         $pdo = $this->pdo();
 
-        if (!$pdo->inTransaction()) {
+        if ($this->transactionDepth === 0) {
             throw TransactionException::notActive('commit', $this->connectionConfig->driver);
         }
 
+        if ($this->transactionDepth > 1) {
+            // Nested — release savepoint instead of committing.
+            $this->transactionDepth--;
+            $pdo->exec('RELEASE SAVEPOINT sp' . ($this->transactionDepth + 1));
+            return;
+        }
+
         $pdo->commit();
+        $this->transactionDepth = 0;
     }
 
     public function rollBack(): void
     {
         $pdo = $this->pdo();
 
-        if (!$pdo->inTransaction()) {
+        if ($this->transactionDepth === 0) {
             throw TransactionException::notActive('rollBack', $this->connectionConfig->driver);
         }
 
+        if ($this->transactionDepth > 1) {
+            // Nested — rollback to savepoint instead of full rollback.
+            $depth = $this->transactionDepth;
+            $this->transactionDepth--;
+            $pdo->exec('ROLLBACK TO SAVEPOINT sp' . $depth);
+            return;
+        }
+
         $pdo->rollBack();
+        $this->transactionDepth = 0;
     }
 
     public function inTransaction(): bool
     {
-        return $this->pdo?->inTransaction() ?? false;
+        return $this->transactionDepth > 0;
     }
 
-    public function transaction(callable $callback, ?IsolationLevel $isolation = null): mixed
+    public function transactionDepth(): int
     {
-        $this->beginTransaction($isolation);
+        return $this->transactionDepth;
+    }
 
-        try {
-            $result = $callback($this);
-            $this->commit();
-            return $result;
-        } catch (\Throwable $e) {
+    public function transaction(callable $callback, ?IsolationLevel $isolation = null, int $attempts = 1): mixed
+    {
+        $attempt = 0;
+
+        while (true) {
+            $attempt++;
+            $this->beginTransaction($isolation);
+
             try {
-                $this->rollBack();
-            } catch (\Throwable) {
-                // Swallow rollback failure — the original exception is more important
+                $result = $callback($this);
+                $this->commit();
+                return $result;
+            } catch (DeadlockException $e) {
+                // Rollback and retry on deadlock (up to $attempts times).
+                try {
+                    $this->rollBack();
+                } catch (\Throwable) {
+                    // Swallow rollback failure
+                }
+
+                if ($attempt < $attempts) {
+                    // Exponential backoff: 10ms * 2^(attempt-1)
+                    usleep(10000 * (2 ** ($attempt - 1)));
+                    continue;
+                }
+
+                throw $e;
+            } catch (\Throwable $e) {
+                try {
+                    $this->rollBack();
+                } catch (\Throwable) {
+                    // Swallow rollback failure — the original exception is more important
+                }
+                throw $e;
             }
-            throw $e;
         }
     }
 
